@@ -1,0 +1,69 @@
+services:
+  # ===== PostgreSQL =====
+  postgres:
+    image: postgres:16-alpine
+    container_name: minepanel_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     minepanel
+      POSTGRES_PASSWORD: minepanel123
+      POSTGRES_DB:       minepanel
+    volumes:
+      - minepanel_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U minepanel"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===== Redis =====
+  redis:
+    image: redis:7-alpine
+    container_name: minepanel_redis
+    restart: unless-stopped
+    ports:
+      - "6390:6379"
+    volumes:
+      - minepanel_redis_data:/data
+
+  # ===== Backend (NestJS) =====
+  backend:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: minepanel_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      DB_HOST:     postgres
+      DB_PORT:     5432
+      DB_USERNAME: minepanel
+      DB_PASSWORD: minepanel123
+      DB_NAME:     minepanel
+      JWT_SECRET:  minepanel-super-secret-jwt-key-2026
+      JWT_EXPIRES_IN: 7d
+      PORT:        3001
+    ports:
+      - "3002:3001"
+
+  # ===== Frontend (Vite build) =====
+  frontend:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: minepanel_frontend
+    restart: unless-stopped
+    ports:
+      - "3008:80"
+    depends_on:
+      - backend
+
+volumes:
+  minepanel_postgres_data:
+  minepanel_redis_data:

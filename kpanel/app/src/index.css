@@ -1,0 +1,917 @@
+/* ============================================================
+   Kpanel – Global Styles
+   Nguyên tắc: sạch, tối thiểu, Inter font, 3 màu chính
+   ============================================================ */
+
+/* ---------- CSS Variables ---------- */
+:root {
+  --color-bg: #FDFDFD;
+  --color-bg-sub: #F5F5F5;
+  --color-accent: #009688;
+  --color-accent-hover: #26a69a;
+  --color-text: #212121;
+  --color-text-sub: #757575;
+  --color-border: #E0E0E0;
+  --color-white: #FFFFFF;
+
+  --radius-sm: 5px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.07);
+
+  --font: 'Inter', sans-serif;
+  --transition: 0.15s ease;
+}
+
+/* ---------- Reset ---------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  background: var(--color-bg);
+  font-family: var(--font);
+  font-size: 14px;
+  color: var(--color-text);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- Scrollbar ---------- */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 99px;
+}
+
+/* ---------- Ant Design overrides – tối giản ---------- */
+.ant-layout {
+  background: var(--color-bg);
+}
+
+.ant-layout-sider {
+  background: var(--color-bg-sub) !important;
+  border-right: 1px solid var(--color-border);
+}
+
+.ant-layout-header {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.ant-menu-light {
+  background: var(--color-bg-sub);
+  border-inline-end: none !important;
+}
+
+.ant-menu-item-selected {
+  background: rgba(22, 119, 255, 0.08) !important;
+  color: var(--color-accent) !important;
+}
+
+.ant-menu-item:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+.ant-card {
+  border-radius: var(--radius-md) !important;
+  border-color: var(--color-border) !important;
+  box-shadow: none !important;
+}
+
+
+.ant-btn-primary {
+  background-color: var(--color-accent) !important;
+  border-color: var(--color-accent) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+.ant-btn-primary:hover {
+  background-color: var(--color-accent-hover) !important;
+}
+
+.ant-btn:not(.ant-btn-circle) {
+  border-radius: var(--radius-sm) !important;
+}
+
+.ant-btn.ant-btn-circle {
+  border-radius: 50% !important;
+}
+
+.ant-input {
+  border-radius: var(--radius-sm) !important;
+  border-color: var(--color-border) !important;
+}
+
+.ant-input:focus,
+.ant-input-focused {
+  border-color: var(--color-accent) !important;
+  box-shadow: none !important;
+}
+
+.ant-table-thead>tr>th {
+  background: var(--color-bg-sub) !important;
+  border-bottom: 1px solid var(--color-border) !important;
+  font-weight: bold !important;
+}
+
+
+
+.ant-table-tbody>tr:hover>td {
+  background: rgba(0, 0, 0, 0.02) !important;
+}
+
+/* Make Card wrapping Table transparent and borderless */
+.transparent-table-card {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Then make the table look like a Card */
+.transparent-table-card .ant-table-wrapper>.ant-spin-nested-loading>.ant-spin-container>.ant-table {
+  background: var(--color-bg-container);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  box-shadow: none !important;
+  overflow: hidden;
+}
+
+/* Make bottom border of the last row transparent to prevent double-thick border at the bottom, without changing height */
+.transparent-table-card .ant-table-tbody>tr:last-child {
+  border-bottom: none !important;
+}
+
+/* Make pagination a distinct separate frame */
+.transparent-table-card .ant-table-wrapper .ant-pagination-container {
+  margin: 6px 0 0 0 !important;
+  padding: 5px 8px;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-white) !important;
+  box-shadow: none !important;
+}
+
+.transparent-table-card .ant-table-wrapper .ant-pagination-container .ant-pagination {
+  margin: 0 !important;
+}
+
+/* When touching the bottom edge of screen, lose the bottom rounded corners */
+.transparent-table-card .ant-table-wrapper .ant-pagination-container.is-stuck {
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  border-radius: var(--radius-md) var(--radius-md) 0 0 !important;
+  border-bottom: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.ant-pagination-total-text {
+  margin-right: auto !important;
+}
+
+.ant-tag {
+  border-radius: var(--radius-sm) !important;
+}
+
+.ant-badge-status-dot {
+  border-radius: 50%;
+}
+
+.ant-statistic-content-value {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* Left Tabs Styling */
+.ant-tabs-left>.ant-tabs-nav .ant-tabs-nav-list {
+  gap: 15px !important;
+}
+
+.ant-tabs-left>.ant-tabs-nav .ant-tabs-tab {
+  padding: 0px 16px 0px 0px !important;
+  margin: 0px !important;
+  min-height: 20px !important;
+  line-height: 20px !important;
+}
+
+.ant-tabs-left>.ant-tabs-nav .ant-tabs-tab-btn {
+  text-align: left !important;
+  width: 100% !important;
+  line-height: 20px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Remove button wave effect and shadows */
+.ant-btn {
+  box-shadow: none !important;
+}
+
+.ant-btn:hover,
+.ant-btn:focus,
+.ant-btn:active {
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.ant-btn::after {
+  display: none !important;
+}
+
+/* Global layout spacing compression to pull everything closer together and to the top */
+
+/* Pull search bar closer to tabs globally */
+.ant-tabs {
+  margin-top: 0px !important;
+  margin-bottom: 0px !important;
+}
+
+/* Reduce spacing below tabs so it is close but doesn't touch the search input */
+.ant-tabs-top>.ant-tabs-nav,
+.ant-tabs-nav {
+  margin-bottom: 4px !important;
+  padding-bottom: 0px !important;
+}
+
+/* Lightning fast native action buttons */
+.k-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-sub);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color 0.3s;
+}
+
+/* Remove grey background hover effect on Segmented */
+.ant-segmented .ant-segmented-item:hover::after {
+  background-color: transparent !important;
+}
+
+.ant-segmented .ant-segmented-item:hover .ant-segmented-item-label {
+  color: #009688 !important;
+}
+
+/* Windows 11 File Explorer Styles */
+.win11-frame {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  color: #202020;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.win11-cmd-bar {
+  background: transparent;
+  height: 48px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.win11-cmd-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 12px;
+  margin-right: 8px;
+  border-right: 1px solid #eaeaea;
+  flex-shrink: 0;
+}
+
+.win11-cmd-group:last-child {
+  border-right: none;
+  margin-right: 0;
+  padding-right: 0;
+}
+
+.win11-cmd-btn {
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #202020;
+  font-size: 13px;
+  transition: all 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.win11-cmd-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.win11-cmd-btn:active {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.win11-cmd-btn.disabled {
+  color: #a0a0a0;
+  pointer-events: none;
+}
+
+.win11-address-bar {
+  background: transparent;
+  height: 48px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #f0f0f0;
+  flex-shrink: 0;
+}
+
+.win11-nav-btn {
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #202020;
+}
+
+.win11-nav-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.win11-nav-btn:disabled {
+  color: #ccc;
+  pointer-events: none;
+}
+
+.win11-path-container {
+  flex: 1;
+  background: #ffffff;
+  border: 1px solid #d9d9d9;
+  color: #202020;
+  border-radius: 4px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  height: 32px;
+  transition: border-color 0.2s;
+}
+
+.win11-breadcrumb-item {
+  padding: 2px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #1a1a1a;
+  transition: background 0.1s;
+}
+
+.win11-breadcrumb-item:hover {
+  background: #e5f3ff;
+}
+
+.win11-breadcrumb-separator {
+  padding: 2px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #666;
+  margin: 0 2px;
+  transition: background 0.1s;
+}
+
+.win11-breadcrumb-separator:hover {
+  background: #e5f3ff;
+  color: #1a1a1a;
+}
+
+.win11-path-container:hover,
+.win11-path-container:focus-within {
+  border-color: #0078d4;
+}
+
+.win11-search-input {
+  width: 260px;
+  height: 32px;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #202020;
+  border: 1px solid #d9d9d9;
+}
+
+.win11-search-input:hover,
+.win11-search-input:focus-within {
+  border-color: #0078d4;
+}
+
+.win11-sidebar {
+  background: transparent;
+  padding: 16px 16px 16px 8px;
+  border-right: 1px solid #f0f0f0;
+}
+
+.win11-main {
+  background: transparent;
+  flex: 1;
+  overflow: auto;
+  position: relative;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.win11-main * {
+  -webkit-user-drag: none;
+}
+
+/* Light theme & borderless for KTable in Files page */
+.ant-table-wrapper.win11-table>.ant-spin-nested-loading>.ant-spin-container>.ant-table,
+.ant-table-wrapper.win11-table .ant-table-container,
+.ant-table-wrapper.win11-table .ant-table-content {
+  border: none !important;
+  border-radius: 0 !important;
+  background: #ffffff !important;
+  color: #202020 !important;
+  overflow: visible !important;
+}
+
+.ant-table-wrapper.win11-table .ant-table-container table>thead>tr>th {
+  background: #ffffff !important;
+  color: #666666 !important;
+  border-bottom: 1px solid #f0f0f0 !important;
+  /* Windows light mode has a subtle header border */
+  border-radius: 0 !important;
+  padding: 4px 16px !important;
+  font-weight: 400 !important;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  white-space: nowrap !important;
+}
+
+.ant-table-wrapper.win11-table .ant-table-container table>thead>tr>th::before {
+  display: none !important;
+  /* Remove separator lines in header */
+}
+
+.ant-table-row {
+  cursor: default;
+}
+
+.ant-table-wrapper.win11-table .ant-table-tbody>tr>td {
+  border-bottom: none !important;
+  /* No borders between rows */
+  color: #202020 !important;
+  padding: 6px 16px !important;
+  white-space: nowrap !important;
+}
+
+.ant-table-wrapper.win11-table .ant-table-selection-column {
+  padding-right: 0 !important;
+  padding-left: 8px !important;
+  text-align: left !important;
+  width: 24px !important;
+  min-width: 24px !important;
+}
+
+.ant-table-wrapper.win11-table .ant-table-selection {
+  display: inline-block !important;
+  text-align: left !important;
+}
+
+.ant-table-wrapper.win11-table .ant-table-selection-column+th,
+.ant-table-wrapper.win11-table td.ant-table-selection-column+td,
+.ant-table-wrapper.win11-table th.ant-table-selection-column+th .ant-table-column-sorters {
+  padding-left: 4px !important;
+}
+
+.ant-table-wrapper.win11-table .ant-table-tbody>tr.ant-table-row:hover>td {
+  background: #f3f3f3 !important;
+  /* Windows hover color */
+}
+
+.ant-table-wrapper.win11-table .ant-table-tbody>tr.ant-table-row-selected>td {
+  background: #e5f3ff !important;
+  /* Windows selected color */
+}
+
+.ant-table-wrapper.win11-table .ant-table-tbody>tr.ant-table-row-selected:hover>td {
+  background: #e5f3ff !important;
+}
+
+.ant-table-wrapper.win11-table .ant-pagination {
+  color: #202020;
+  border-left: none !important;
+  border-right: none !important;
+  border-top: 1px solid #f0f0f0 !important;
+  border-bottom: 1px solid #f0f0f0 !important;
+  border-radius: 0 !important;
+}
+
+.ant-table-wrapper.win11-table .ant-empty-description {
+  color: #888888 !important;
+}
+
+/* Remove gray background on empty state placeholder */
+.ant-table-wrapper.win11-table .ant-table-tbody .ant-table-placeholder {
+  background: transparent !important;
+}
+
+.ant-table-wrapper.win11-table .ant-table-tbody .ant-table-placeholder td {
+  background: transparent !important;
+  border-bottom: none !important;
+}
+
+.ant-table-wrapper.win11-table .ant-table-tbody .ant-table-placeholder:hover td {
+  background: transparent !important;
+}
+
+/* Grid Item Selection */
+.win11-grid-item {
+  border: 1px solid transparent !important;
+  transition: all 0.2s;
+  cursor: default !important;
+}
+
+.win11-grid-item.selected {
+  background-color: #e5f3ff !important;
+  border-color: #99d1ff !important;
+}
+
+/* Selecto Box Style */
+.selecto-selection {
+  background-color: rgba(0, 120, 215, 0.2) !important;
+  box-shadow: inset 0 0 0 1px rgba(0, 120, 215, 0.8) !important;
+  border: none !important;
+  z-index: 100 !important;
+}
+
+.ant-table-wrapper.win11-table .ant-table-thead>tr>th {
+  position: sticky;
+  top: 0;
+  z-index: 10 !important;
+  background: white;
+}
+
+/* Fix grey background on sorted columns globally */
+td.ant-table-column-sort {
+  background: transparent !important;
+}
+
+/* Disable search and typing in Pagination Size Changer and force pointer cursor */
+.ant-pagination-options-size-changer .ant-select-selection-search {
+  display: none !important;
+}
+
+.ant-pagination-options-size-changer .anticon-search {
+  display: none !important;
+}
+
+.ant-pagination-options-size-changer,
+.ant-pagination-options-size-changer .ant-select,
+.ant-pagination-options-size-changer .ant-select-selector,
+.ant-pagination-options-size-changer .ant-select-selection-item,
+.ant-select-dropdown .ant-select-item {
+  cursor: pointer !important;
+}
+
+.k-action-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--color-text);
+}
+
+.k-action-btn.k-danger:hover {
+  background: #fff1f0;
+  color: #ff4d4f;
+}
+
+/* Fix select text overflow and icon overlap when custom nodes/flex/Space are used */
+.ant-select-selection-item {
+  display: flex !important;
+  align-items: center;
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.ant-select-selection-item .ant-space {
+  display: inline-flex !important;
+  max-width: calc(100% - 10px) !important;
+  overflow: hidden;
+}
+
+.ant-select-selection-item .ant-space-item {
+  overflow: hidden;
+}
+
+.ant-select-selection-item .ant-space-item:last-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Fix tooltips and popovers spacing to prevent content/buttons from touching edges */
+.ant-popover .ant-popover-inner {
+  padding: 14px 16px !important;
+  border-radius: var(--radius-md) !important;
+}
+
+.ant-popover .ant-popover-inner-content {
+  padding: 0 !important;
+}
+
+.ant-tooltip .ant-tooltip-inner {
+  padding: 8px 12px !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+
+.ant-popconfirm .ant-popconfirm-buttons,
+.ant-popover .ant-popover-buttons,
+.ant-popover .ant-popconfirm-buttons {
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+  margin-top: 12px !important;
+  margin-right: 0 !important;
+  margin-inline-end: 0 !important;
+}
+
+.ant-popconfirm .ant-popconfirm-buttons button,
+.ant-popover .ant-popover-buttons button,
+.ant-popover .ant-popconfirm-buttons button {
+  margin: 0 !important;
+}
+
+
+
+/* Force all tables to have reduced row height globally */
+.ant-table-tbody>tr>td {
+  padding: 8px 12px !important;
+}
+
+.ant-table-thead>tr>th {
+  padding: 8px 12px !important;
+}
+
+/* Align first and last columns perfectly with top controls */
+.ant-table-thead>tr>th:last-child,
+.ant-table-tbody>tr>td:last-child {
+  text-align: right !important;
+}
+
+.ant-table-tbody>tr>td:last-child .ant-space {
+  display: flex !important;
+  width: 100% !important;
+  justify-content: flex-end !important;
+}
+
+/* Global overrides to shrink Table Pagination elements to match reference image exactly */
+.transparent-table-card .ant-table-wrapper .ant-pagination-container,
+.ant-pagination-container {
+  padding: 8px 12px !important;
+  margin-top: 10px !important;
+  min-height: 40px !important;
+  height: 40px !important;
+}
+
+.ant-pagination-total-text {
+  font-size: 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+/* Adjust Select elements within pagination to 24px height */
+.transparent-table-card .ant-table-wrapper .ant-pagination-container .ant-select,
+.ant-pagination-container .ant-select {
+  height: 24px !important;
+}
+
+.transparent-table-card .ant-table-wrapper .ant-pagination-container .ant-select-selector,
+.ant-pagination-container .ant-select-selector {
+  height: 24px !important;
+  min-height: 24px !important;
+  padding: 0 10px !important;
+  font-size: 13px !important;
+  line-height: 22px !important;
+  border-radius: 6px !important;
+}
+
+.transparent-table-card .ant-table-wrapper .ant-pagination-container .ant-select-selection-item,
+.transparent-table-card .ant-table-wrapper .ant-pagination-container .ant-select-selection-placeholder,
+.ant-pagination-container .ant-select-selection-item,
+.ant-pagination-container .ant-select-selection-placeholder {
+  line-height: 22px !important;
+  font-size: 13px !important;
+}
+
+.transparent-table-card .ant-table-wrapper .ant-pagination-container .ant-select-arrow,
+.ant-pagination-container .ant-select-arrow {
+  font-size: 10px !important;
+}
+
+/* Adjust Button elements within pagination to 24px height */
+.transparent-table-card .ant-table-wrapper .ant-pagination-container .ant-btn,
+.ant-pagination-container .ant-btn {
+  height: 24px !important;
+  min-height: 24px !important;
+  padding: 0 10px !important;
+  font-size: 13px !important;
+  line-height: 22px !important;
+  border-radius: 6px !important;
+}
+
+.transparent-table-card .ant-table-wrapper .ant-pagination-container .ant-btn-small,
+.ant-pagination-container .ant-btn-small {
+  height: 24px !important;
+  min-height: 24px !important;
+  padding: 0 10px !important;
+  font-size: 13px !important;
+  line-height: 22px !important;
+}
+
+/* Adjust Pagination button items (prev, numbers, next) to 24px height */
+.transparent-table-card .ant-table-wrapper .ant-pagination-container .ant-pagination-item,
+.transparent-table-card .ant-table-wrapper .ant-pagination-container .ant-pagination-item-link,
+.ant-pagination-container .ant-pagination-item,
+.ant-pagination-container .ant-pagination-item-link {
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px !important;
+  line-height: 22px !important;
+  font-size: 13px !important;
+  border-radius: 6px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Remove border/frame from '<' and '>' navigation links */
+.transparent-table-card .ant-table-wrapper .ant-pagination-container .ant-pagination-item-link,
+.ant-pagination-container .ant-pagination-item-link {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.transparent-table-card .ant-table-wrapper .ant-pagination-container .ant-pagination-item-link svg,
+.ant-pagination-container .ant-pagination-item-link svg {
+  width: 5px !important;
+  height: 8px !important;
+}
+
+/* Ensure the checkbox in the table pagination footer is perfectly centered vertically */
+.ant-pagination-container .ant-checkbox-wrapper {
+  display: inline-flex !important;
+  align-items: center !important;
+  vertical-align: middle !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  height: 24px !important;
+}
+
+/* Remove top/bottom white spaces in the pagination dropdown popup and match option item heights to 24px */
+.transparent-table-card .ant-table-wrapper .ant-pagination-container .ant-select-dropdown,
+.ant-pagination-container .ant-select-dropdown {
+  padding: 0 !important;
+}
+
+.transparent-table-card .ant-table-wrapper .ant-pagination-container .ant-select-item,
+.ant-pagination-container .ant-select-item {
+  min-height: 24px !important;
+  height: 24px !important;
+  line-height: 24px !important;
+  padding: 0 10px !important;
+  font-size: 13px !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+/* Restore Tab bar colors and weights to match reference image 2 exactly */
+.ant-tabs-tab .ant-tabs-tab-btn {
+  color: #000000 !important;
+}
+.ant-tabs-tab .anticon {
+  color: #000000 !important;
+}
+.ant-tabs-tab-active .ant-tabs-tab-btn,
+.ant-tabs-tab-active .anticon {
+  color: #1677ff !important;
+}
+.ant-tabs-tab:hover .ant-tabs-tab-btn,
+.ant-tabs-tab:hover .anticon {
+  color: #1677ff !important;
+}
+.ant-tabs-ink-bar {
+  background: #1677ff !important;
+}
+
+/* Decrease the gap between pagination item buttons to place them closer together */
+.ant-pagination {
+  gap: 4px !important;
+}
+
+/* Restore ant-tag-blue and ant-tag-processing to their original standard blue color */
+.ant-tag-blue,
+.ant-tag-processing {
+  color: #1677ff !important;
+  background: #e6f4ff !important;
+  border-color: #91caff !important;
+}
+
+/* Custom styled tag presets to look premium */
+.ant-tag-cyan {
+  color: #009688 !important;
+  background: #e0f2f1 !important;
+  border-color: #b2dfdb !important;
+}
+
+.ant-tag-purple {
+  color: #531dab !important;
+  background: #f9f0ff !important;
+  border-color: #d3adf7 !important;
+}
+
+/* Make small action buttons in tables (Thao tác column) perfectly square and centered */
+.ant-table-cell .ant-btn-sm,
+.ant-table-cell .ant-btn-small {
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px !important;
+  padding: 0 !important;
+  border-radius: 6px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Make tabs display closer together and align them closer to the left */
+.ant-tabs-nav-list {
+  gap: 8px !important;
+}
+
+.ant-tabs-tab {
+  padding: 8px 8px !important;
+}
+
+.ant-tabs-tab:first-child {
+  padding-left: 0px !important;
+}
+
+/* Compact dropdown menu styles */
+.custom-dropdown-menu .ant-menu-item {
+  margin: 1px 4px !important;
+  border-radius: 4px !important;
+}
+
+.custom-dropdown-menu .ant-menu-item > div,
+.custom-dropdown-menu .ant-menu-item > a {
+  padding: 4px 12px !important;
+  font-size: 13px !important;
+  gap: 8px !important;
+}
+
+/* Remove blurry focus shadow from select and dropdown triggers */
+.ant-select-open.ant-select-focused .ant-select-selector,
+.ant-select-focused .ant-select-selector,
+.ant-select-selector:focus,
+.ant-select-selector:active {
+  box-shadow: none !important;
+  border-color: var(--color-border, #d9d9d9) !important;
+}
+
+.ant-btn:focus,
+.ant-btn:focus-visible,
+.ant-btn:active {
+  outline: none !important;
+  box-shadow: none !important;
+}

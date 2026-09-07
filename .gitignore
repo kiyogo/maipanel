@@ -1,0 +1,29 @@
+# Dependencies and generated files
+node_modules/
+dist/
+build/
+coverage/
+.cache/
+.vite/
+*.tsbuildinfo
+*.log
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.pfx
+*.p12
+*.sqlite
+*.sqlite3
+*.db
+
+# Editor, OS and agent working files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.agents/
