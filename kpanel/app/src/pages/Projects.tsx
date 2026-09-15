@@ -486,14 +486,13 @@ const Projects: React.FC = () => {
       <Tabs
         activeKey={activeTab}
         onChange={handleTabChange}
-        style={{ marginBottom: 12 }}
         items={projectTypes.map(t => ({
           key: t.key,
           label: t.label,
         }))}
       />
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 0 }}>
         <Input prefix={<SearchOutlined style={{ color: '#bbb' }} />} placeholder={t('projects.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} style={{ width: 320, borderRadius: 6 }} allowClear />
         <Space>
           <Button icon={<DownloadOutlined />} onClick={() => handleExport('excel')}>{t('projects.exportExcel')}</Button>
@@ -525,7 +524,7 @@ const Projects: React.FC = () => {
                 <Select
                   size="small"
                   value={batchAction || undefined}
-                  onChange={setBatchAction}
+                  onChange={(val) => setBatchAction(val || '')}
                   style={{ width: 140 }}
                   placeholder={t('projects.batchPlaceholder')}
                   options={[
@@ -545,7 +544,7 @@ const Projects: React.FC = () => {
       />
 
       <Modal title={t('projects.createModalTitle').replace('{type}', typeMap[activeTab]?.label || t('projects.createModalOther'))} open={open} onOk={handleAdd} onCancel={() => setOpen(false)} confirmLoading={actionLoading === 'add'} okText={t('projects.createModalOk')} cancelText={t('common.cancel')} width={520}>
-        <Form form={form} layout="vertical" style={{ marginTop: 12 }}>
+        <Form form={form} layout="vertical">
           {fields.map(f => (
             <Form.Item key={f.name} name={f.name} label={f.label} rules={f.rules} valuePropName={f.component.type === Switch ? 'checked' : undefined}>
               {f.component}

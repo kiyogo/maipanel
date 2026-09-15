@@ -4,6 +4,7 @@ import { SaveOutlined, UploadOutlined, PlusOutlined, DeleteOutlined, EyeOutlined
 import { KTable } from '../components/KTable';
 import { useLanguage } from '../context/LanguageContext';
 import { settingsContentTranslations } from '../context/settingsTranslations';
+import { SettingsAppearance } from './SettingsAppearance';
 
 const { Title, Text } = Typography;
 
@@ -58,6 +59,11 @@ const Settings: React.FC = () => {
           </Col>
         </Row>
       ),
+    },
+    {
+      key: 'appearance',
+      label: <Space><BgColorsOutlined />Giao diện</Space>,
+      children: <SettingsAppearance />,
     },
     {
       key: 'system', label: <Space><ThunderboltOutlined />{t('settings.system')}</Space>,

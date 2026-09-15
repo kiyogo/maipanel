@@ -170,7 +170,7 @@ const Accounts: React.FC = () => {
           key: 'users', label: <Space><UserOutlined />{t('accounts.tabUsers')}</Space>,
           children: (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 0 }}>
                 <Input prefix={<SearchOutlined style={{ color: '#bbb' }} />} placeholder={t('accounts.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} style={{ width: 320, borderRadius: 6 }} allowClear />
                 <Button type="primary" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setOpen(true); }}>{t('accounts.addAccount')}</Button>
               </div>
@@ -196,7 +196,7 @@ const Accounts: React.FC = () => {
                         <Select
                           size="small"
                           value={batchAction || undefined}
-                          onChange={setBatchAction}
+                          onChange={(val) => setBatchAction(val || '')}
                           style={{ width: 140 }}
                           placeholder={t('accounts.batchPlaceholder')}
                           options={[
@@ -372,7 +372,7 @@ const Accounts: React.FC = () => {
       ]} />
 
       <Modal title={t('accounts.modalAddTitle')} open={open} onOk={handleAdd} onCancel={() => setOpen(false)} confirmLoading={actionLoading === 'add'} okText={t('accounts.btnSave')} cancelText={t('common.cancel')}>
-        <Form form={form} layout="vertical" style={{ marginTop: 12 }}>
+        <Form form={form} layout="vertical">
           <Form.Item name="name" label={t('accounts.fieldDisplayName')} rules={[{ required: true, message: t('accounts.validationDisplayName') }]}><Input placeholder={t('accounts.fieldDisplayNamePlaceholder')} /></Form.Item>
           <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email', message: t('accounts.validationEmail') }]}><Input placeholder="username@example.com" /></Form.Item>
           <Form.Item name="role" label={t('accounts.colRole')} rules={[{ required: true, message: t('accounts.validationRole') }]}><Select options={roleOptions} placeholder={t('accounts.validationRole')} /></Form.Item>
@@ -381,7 +381,7 @@ const Accounts: React.FC = () => {
       </Modal>
 
       <Modal title={t('accounts.modalEditTitle').replace('{name}', selectedUser?.name || '')} open={editOpen} onCancel={() => setEditOpen(false)} footer={null}>
-        <Form form={editForm} layout="vertical" style={{ marginTop: 12 }}>
+        <Form form={editForm} layout="vertical">
           <Form.Item name="name" label={t('accounts.fieldDisplayName')}><Input /></Form.Item>
           <Form.Item name="email" label="Email"><Input /></Form.Item>
           <Form.Item name="role" label={t('accounts.colRole')}><Select options={roleOptions} /></Form.Item>

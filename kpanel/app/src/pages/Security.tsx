@@ -369,7 +369,7 @@ const Security: React.FC = () => {
       ]} />
 
       <Modal title={t('security.modalAddFw')} open={fwOpen} onOk={handleAddFw} onCancel={() => setFwOpen(false)} okText={t('security.btnSave')} cancelText={t('security.btnCancel')}>
-        <Form form={fwForm} layout="vertical" style={{ marginTop: 12 }}>
+        <Form form={fwForm} layout="vertical">
           <Form.Item name="port" label={t('security.fieldPort')} rules={[{ required: true, message: t('security.validationPort') }]}><Input placeholder="80" type="number" /></Form.Item>
           <Form.Item name="protocol" label={t('security.colProtocol')} rules={[{ required: true }]}><Select options={[{ label: 'TCP', value: 'TCP' }, { label: 'UDP', value: 'UDP' }, { label: 'BOTH', value: 'BOTH' }]} /></Form.Item>
           <Form.Item name="action" label={t('security.colAction')} rules={[{ required: true }]}><Select options={[{ label: t('security.actionAllow'), value: 'allow' }, { label: t('security.actionDeny'), value: 'deny' }]} /></Form.Item>
@@ -379,7 +379,7 @@ const Security: React.FC = () => {
       </Modal>
 
       <Modal title={t('security.modalAddSsl')} open={sslOpen} onCancel={() => setSslOpen(false)} footer={null}>
-        <Form form={sslForm} layout="vertical" style={{ marginTop: 12 }}>
+        <Form form={sslForm} layout="vertical">
           <Form.Item name="domain" label="Domain" rules={[{ required: true, message: t('security.validationDomain') }]}><Input placeholder="example.com" /></Form.Item>
           <Form.Item name="type" label={t('security.colType')}><Select options={[{ label: "Let's Encrypt", value: 'letsencrypt' }, { label: 'Custom', value: 'custom' }]} /></Form.Item>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => { sslForm.validateFields().then(v => { setSslCerts([...sslCerts, { key: String(Date.now()), domain: v.domain, expires: '2026-12-17', status: 'valid', type: v.type || "Let's Encrypt" }]); message.success(t('security.msgSuccessAddSsl')); setSslOpen(false); }); }}>{t('security.btnSave')}</Button>
@@ -387,7 +387,7 @@ const Security: React.FC = () => {
       </Modal>
 
       <Modal title={t('security.modalAddIp')} open={ipOpen} onCancel={() => setIpOpen(false)} footer={null}>
-        <Form form={ipForm} layout="vertical" style={{ marginTop: 12 }}>
+        <Form form={ipForm} layout="vertical">
           <Form.Item name="ip" label="IP / CIDR" rules={[{ required: true }]}><Input placeholder="192.168.1.0/24" /></Form.Item>
           <Form.Item name="action" label={t('security.colAction')}><Select options={[{ label: t('security.actionAllow'), value: 'allow' }, { label: t('security.actionDeny'), value: 'deny' }]} /></Form.Item>
           <Form.Item name="desc" label={t('security.colDesc')}><Input placeholder="Office VPN" /></Form.Item>

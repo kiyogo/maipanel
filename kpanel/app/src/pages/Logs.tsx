@@ -100,7 +100,7 @@ const Logs: React.FC = () => {
     <div>
 
 
-      <Space style={{ marginBottom: 16, flexWrap: 'wrap', width: '100%', justifyContent: 'space-between' }}>
+      <Space style={{ marginBottom: 0, flexWrap: 'wrap', width: '100%', justifyContent: 'space-between' }}>
         <Space style={{ flexWrap: 'wrap' }}>
           {['', 'INFO', 'WARNING', 'ERROR', 'DEBUG'].map(l => (
             <Tag

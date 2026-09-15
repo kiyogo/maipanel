@@ -76,7 +76,7 @@ export function KTable<T extends object>({
     ...(typeof pagination === 'object' ? pagination : {}),
     current: currentPage,
     pageSize: pageSize,
-    total: dataSource?.length || 0,
+    total: typeof pagination === 'object' && pagination.total !== undefined ? pagination.total : (dataSource?.length || 0),
     onChange: (page: number, size: number) => {
       React.startTransition(() => {
         setCurrentPage(page);
@@ -111,7 +111,7 @@ export function KTable<T extends object>({
   };
 
   return (
-    <div ref={containerRef}>
+    <div ref={containerRef} className="ktable-wrapper">
       <Card styles={{ body: { padding: 0 } }} className="transparent-table-card">
         <Table<T>
           {...rest}
@@ -123,4 +123,3 @@ export function KTable<T extends object>({
     </div>
   );
 }
-

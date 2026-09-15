@@ -292,13 +292,12 @@ const Database: React.FC = () => {
       <Tabs
         activeKey={activeTab}
         onChange={handleTabChange}
-        style={{ marginBottom: 12 }}
         items={[
           { key: 'all', label: t('database.tabAll') },
           ...dbTypes.map(t => ({ key: t.key, label: t.key }))
         ]}
       />
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 0 }}>
         <Input prefix={<SearchOutlined style={{ color: '#bbb' }} />} placeholder={t('database.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} style={{ width: 320, borderRadius: 6 }} allowClear />
         <Space>
           <Button icon={<DownloadOutlined />} onClick={() => handleExport('excel')}>{t('database.exportExcel')}</Button>
@@ -330,7 +329,7 @@ const Database: React.FC = () => {
                 <Select
                   size="small"
                   value={batchAction || undefined}
-                  onChange={setBatchAction}
+                  onChange={(val) => setBatchAction(val || '')}
                   style={{ width: 140 }}
                   placeholder={t('database.batchPlaceholder')}
                   options={[
@@ -349,7 +348,7 @@ const Database: React.FC = () => {
       />
 
       <Modal title={t('database.addModalTitle')} open={open} onOk={handleAdd} onCancel={() => setOpen(false)} confirmLoading={actionLoading === 'add'} okText={t('database.addModalOk')} cancelText={t('common.cancel')}>
-        <Form form={form} layout="vertical" style={{ marginTop: 12 }}>
+        <Form form={form} layout="vertical">
           <Form.Item name="name" label={t('database.fieldName')} rules={[{ required: true, message: t('database.fieldNameRequired') }]}><Input placeholder="my_database" /></Form.Item>
           <Form.Item name="type" label={t('database.fieldType')} rules={[{ required: true, message: t('database.fieldTypeRequired') }]}><Select options={typeOptions} /></Form.Item>
           <Form.Item name="server" label={t('database.fieldServer')}><Select options={serverOptions} placeholder={t('database.fieldServerPlaceholder')} notFoundContent={t('database.fieldServerNotFound')} /></Form.Item>

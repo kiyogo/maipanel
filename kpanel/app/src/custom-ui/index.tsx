@@ -1,8 +1,135 @@
-import React, { useState, useEffect, useRef, createContext, useContext } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, createContext, useContext } from 'react';
 import { createPortal } from 'react-dom';
+import { createRoot } from 'react-dom/client';
 import { Link } from 'react-router-dom';
-import { EyeOutlined, EyeInvisibleOutlined, CloseCircleFilled, CheckCircleFilled, InfoCircleFilled, ExclamationCircleFilled } from '@ant-design/icons';
+import {
+  EyeOutlined, EyeInvisibleOutlined, CloseCircleFilled, CheckCircleFilled, InfoCircleFilled,
+  ExclamationCircleFilled, CheckOutlined, WarningFilled, UploadOutlined, FileOutlined, DeleteOutlined,
+  FolderOutlined, ArrowLeftOutlined, SearchOutlined, UnorderedListOutlined, AppstoreOutlined,
+  FilePdfOutlined, FileWordOutlined, FileExcelOutlined, FileImageOutlined, FileTextOutlined,
+  ReloadOutlined, PlusOutlined, RightOutlined, ScissorOutlined, CopyOutlined,
+  SnippetsOutlined, EditOutlined, FileZipOutlined, ArrowRightOutlined,
+  SafetyCertificateOutlined, InfoCircleOutlined, DownloadOutlined,
+} from '@ant-design/icons';
+import { DatePicker, DatePickerProps } from './DatePicker';
+import { createSystemCode, isSystemGeneratedCodeField } from '../utils/systemCode';
+import { filesApi } from '../api/endpoints';
+import { formatFileSize } from '../utils/fileStorage';
+export { DatePicker };
+export type { DatePickerProps };
 import './theme.css';
+
+// Global trigger tracker for origin-based animations
+if (typeof window !== 'undefined') {
+  const handlePointer = (e: MouseEvent | TouchEvent) => {
+    const clientX = 'touches' in e ? e.touches[0]?.clientX : (e as MouseEvent).clientX;
+    const clientY = 'touches' in e ? e.touches[0]?.clientY : (e as MouseEvent).clientY;
+    if (clientX !== undefined && clientY !== undefined) {
+      (window as any).__lastClickPos = { x: clientX, y: clientY };
+    }
+    const target = e.target as HTMLElement | null;
+    if (target) {
+      const triggerEl = target.closest('button, a, [role="button"], .ant-btn, .win11-cmd-btn, .k-action-btn, tr, td, .ant-table-row, .ant-select, .ant-dropdown, .ant-menu-item');
+      if (triggerEl) {
+        (window as any).__lastTriggerRect = triggerEl.getBoundingClientRect();
+      } else {
+        (window as any).__lastTriggerRect = target.getBoundingClientRect();
+      }
+    }
+  };
+
+  window.addEventListener('mousedown', handlePointer as any, true);
+  window.addEventListener('touchstart', handlePointer as any, true);
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      const active = document.activeElement as HTMLElement | null;
+      if (active) {
+        (window as any).__lastTriggerRect = active.getBoundingClientRect();
+        (window as any).__lastClickPos = {
+          x: (window as any).__lastTriggerRect.left + (window as any).__lastTriggerRect.width / 2,
+          y: (window as any).__lastTriggerRect.top + (window as any).__lastTriggerRect.height / 2,
+        };
+      }
+    }
+  }, true);
+}
+
+export function useOverlayAnimation(open: boolean, durationMs = 180) {
+  const [shouldRender, setShouldRender] = useState(open);
+  const [animClass, setAnimClass] = useState<'enter' | 'exit'>(open ? 'enter' : 'exit');
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const lockedOriginRef = useRef<string | null>(null);
+  const exitTimerRef = useRef<any>(null);
+
+  const closeImmediately = useCallback(() => {
+    if (exitTimerRef.current) {
+      clearTimeout(exitTimerRef.current);
+      exitTimerRef.current = null;
+    }
+    setShouldRender(false);
+    setAnimClass('exit');
+    lockedOriginRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      if (exitTimerRef.current) {
+        clearTimeout(exitTimerRef.current);
+        exitTimerRef.current = null;
+      }
+      setShouldRender(true);
+      setAnimClass('enter');
+    } else if (shouldRender) {
+      setAnimClass('exit');
+      exitTimerRef.current = setTimeout(() => {
+        setShouldRender(false);
+        lockedOriginRef.current = null;
+      }, durationMs);
+      return () => {
+        if (exitTimerRef.current) {
+          clearTimeout(exitTimerRef.current);
+          exitTimerRef.current = null;
+        }
+      };
+    }
+  }, [open, durationMs]);
+
+  // Synchronously compute and lock transform-origin relative to overlay element bounding box
+  React.useLayoutEffect(() => {
+    if (shouldRender && overlayRef.current) {
+      if (open && !lockedOriginRef.current) {
+        let triggerX = window.innerWidth / 2;
+        let triggerY = window.innerHeight / 2;
+
+        const lastRect = (window as any).__lastTriggerRect;
+        const lastPos = (window as any).__lastClickPos;
+
+        if (lastRect) {
+          triggerX = lastRect.left + lastRect.width / 2;
+          triggerY = lastRect.top + lastRect.height / 2;
+        } else if (lastPos) {
+          triggerX = lastPos.x;
+          triggerY = lastPos.y;
+        }
+
+        const rect = overlayRef.current.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          const originX = triggerX - rect.left;
+          const originY = triggerY - rect.top;
+          lockedOriginRef.current = `${originX}px ${originY}px`;
+        }
+      }
+
+      if (lockedOriginRef.current) {
+        overlayRef.current.style.transformOrigin = lockedOriginRef.current;
+      } else {
+        overlayRef.current.style.transformOrigin = 'top center';
+      }
+    }
+  }, [shouldRender, open]);
+
+  return { shouldRender, animClass, overlayRef, closeImmediately };
+}
 
 // ==========================================
 // 1. ConfigProvider
@@ -15,6 +142,14 @@ export const ConfigProvider: React.FC<{ locale?: any; renderEmpty?: () => React.
     </ConfigContext.Provider>
   );
 };
+
+export const ModalContext = createContext<{
+  setModalLoading: (loading: boolean) => void;
+  isModalLoading: boolean;
+}>({
+  setModalLoading: () => {},
+  isModalLoading: false,
+});
 
 // ==========================================
 // 2. Empty
@@ -131,6 +266,9 @@ interface SpaceProps {
   align?: 'start' | 'end' | 'center' | 'baseline';
   style?: React.CSSProperties;
   className?: string;
+  onContextMenu?: React.MouseEventHandler<HTMLDivElement>;
+  wrap?: boolean;
+  flexWrap?: React.CSSProperties['flexWrap'];
 }
 
 export const Space: React.FC<SpaceProps> = ({
@@ -140,6 +278,8 @@ export const Space: React.FC<SpaceProps> = ({
   align = 'center',
   style,
   className,
+  wrap,
+  flexWrap,
 }) => {
   let gapVal = 8;
   if (typeof size === 'number') gapVal = size;
@@ -154,6 +294,7 @@ export const Space: React.FC<SpaceProps> = ({
         display: 'inline-flex',
         flexDirection: direction === 'vertical' ? 'column' : 'row',
         gap: gapVal,
+        flexWrap: flexWrap || (wrap ? 'wrap' : undefined),
         ...style,
       }}
     >
@@ -174,6 +315,8 @@ interface TypographyTextProps {
   strong?: boolean;
   style?: React.CSSProperties;
   className?: string;
+  code?: boolean;
+  ellipsis?: boolean | { tooltip?: boolean };
 }
 
 export const Typography: React.FC<{ children?: React.ReactNode; style?: React.CSSProperties; className?: string }> & {
@@ -185,11 +328,19 @@ export const Typography: React.FC<{ children?: React.ReactNode; style?: React.CS
   return <div className={`ant-typography ${className || ''}`} style={style}>{children}</div>;
 };
 
-Typography.Text = ({ children, type, strong, style, className }) => {
+Typography.Text = ({ children, type, strong, ellipsis, style, className }) => {
   const typeClass = type ? `ant-typography-${type}` : '';
   const weightStyle = strong ? { fontWeight: 600 } : {};
+  const ellipsisStyle: React.CSSProperties = ellipsis ? {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    display: 'inline-block',
+    maxWidth: '100%',
+    verticalAlign: 'bottom',
+  } : {};
   return (
-    <span className={`ant-typography ${typeClass} ${className || ''}`} style={{ ...weightStyle, ...style }}>
+    <span className={`ant-typography ${typeClass} ${className || ''}`} style={{ ...weightStyle, ...ellipsisStyle, ...style }}>
       {children}
     </span>
   );
@@ -223,20 +374,22 @@ Typography.Paragraph = ({ children, style, className }) => {
 // ==========================================
 // 6. Menu
 // ==========================================
-interface MenuItem {
-  key: string;
-  icon?: React.ReactNode;
-  label: React.ReactNode;
-  danger?: boolean;
-}
-
-interface MenuProps {
-  items?: MenuItem[];
+export interface MenuProps {
+  items?: Array<{
+    key?: string;
+    label?: React.ReactNode;
+    icon?: React.ReactNode;
+    danger?: boolean;
+    disabled?: boolean;
+    type?: 'divider' | 'group' | string;
+    children?: any[];
+    onClick?: (info: any) => void;
+  }>;
   selectedKeys?: string[];
+  onClick?: (info: { key: string; domEvent: React.MouseEvent }) => void;
   mode?: 'vertical' | 'horizontal' | 'inline';
-  onClick?: (info: { key: string }) => void;
-  style?: React.CSSProperties;
   compact?: boolean;
+  style?: React.CSSProperties;
 }
 
 export const Menu: React.FC<MenuProps> = ({ items = [], selectedKeys = [], mode = 'inline', onClick, style, compact }) => {
@@ -245,14 +398,39 @@ export const Menu: React.FC<MenuProps> = ({ items = [], selectedKeys = [], mode 
       className={`ant-menu ant-menu-light ant-menu-root ant-menu-${mode}`}
       style={{
         listStyle: 'none',
-        padding: 0,
         margin: 0,
+        padding: compact ? '4px 0' : 0,
+        background: '#ffffff',
+        backgroundColor: '#ffffff',
+        borderRadius: 6,
+        userSelect: 'none',
         ...style,
       }}
     >
-      {items.map((item) => {
+      {items.map((item, idx) => {
         if (!item) return null;
-        const isSelected = selectedKeys.includes(item.key);
+        if (item.type === 'divider') {
+          return (
+            <li
+              key={item.key || `divider-${idx}`}
+              className="ant-menu-item-divider"
+              style={{
+                height: 1,
+                minHeight: 1,
+                maxHeight: 1,
+                margin: '4px 0',
+                padding: 0,
+                overflow: 'hidden',
+                lineHeight: 0,
+                backgroundColor: '#F1F5F9',
+                border: 'none',
+                listStyle: 'none',
+              }}
+            />
+          );
+        }
+        const itemKey = item.key || `menu-item-${idx}`;
+        const isSelected = selectedKeys.includes(itemKey);
 
         let linkTo: string | undefined;
         let linkHref: string | undefined;
@@ -269,18 +447,20 @@ export const Menu: React.FC<MenuProps> = ({ items = [], selectedKeys = [], mode 
           }
         }
 
-        const handleItemClick = () => {
-          onClick && onClick({ key: item.key });
+        const handleItemClick = (e: React.MouseEvent) => {
+          if (item.disabled) return;
+          onClick && onClick({ key: itemKey, domEvent: e });
+          item.onClick && item.onClick({ key: itemKey, domEvent: e });
         };
 
         const innerContent = (
           <>
             {item.icon && (
-              <span className="ant-menu-item-icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
+              <span className="ant-menu-item-icon" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 14, fontSize: 13, flexShrink: 0 }}>
                 {item.icon}
               </span>
             )}
-            <span className="ant-menu-title-content" style={{ flex: 1 }}>
+            <span className="ant-menu-title-content" style={{ flex: 1, display: 'inline-flex', alignItems: 'center', textAlign: 'left', whiteSpace: 'nowrap' }}>
               {labelContent}
             </span>
           </>
@@ -289,10 +469,10 @@ export const Menu: React.FC<MenuProps> = ({ items = [], selectedKeys = [], mode 
         const itemStyle: React.CSSProperties = {
           display: 'flex',
           alignItems: 'center',
-          cursor: 'pointer',
+          cursor: item.disabled ? 'not-allowed' : 'pointer',
           borderRadius: compact ? 4 : 8,
           margin: compact ? '1px 4px' : '3px 8px',
-          color: isSelected ? 'var(--color-accent, #009688)' : 'var(--antd-text)',
+          color: item.danger ? '#EF4444' : item.disabled ? '#94A3B8' : isSelected ? 'var(--color-accent, #009688)' : 'var(--antd-text)',
           background: isSelected ? 'rgba(0, 150, 136, 0.08)' : 'transparent',
           transition: 'all 0.15s ease',
           padding: 0,
@@ -312,10 +492,22 @@ export const Menu: React.FC<MenuProps> = ({ items = [], selectedKeys = [], mode 
 
         return (
           <li
-            key={item.key}
+            key={itemKey}
             className={`ant-menu-item ${isSelected ? 'ant-menu-item-selected' : ''} ${item.danger ? 'ant-menu-item-danger' : ''}`}
             onClick={handleItemClick}
             style={itemStyle}
+            onMouseEnter={(e) => {
+              if (!item.disabled && !isSelected) {
+                e.currentTarget.style.background = item.danger ? '#FEF2F2' : '#F5F5F5';
+                if (item.danger) e.currentTarget.style.color = '#DC2626';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!item.disabled && !isSelected) {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = item.danger ? '#EF4444' : 'var(--antd-text)';
+              }
+            }}
           >
             {linkTo ? (
               <Link to={linkTo} style={linkStyle}>
@@ -372,15 +564,35 @@ export const Avatar: React.FC<{ size?: number | 'small' | 'large' | 'default'; i
 // ==========================================
 // 8. Dropdown
 // ==========================================
-export const Dropdown: React.FC<{ menu?: MenuProps; placement?: string; children: React.ReactNode; trigger?: ('click' | 'hover')[] }> = ({ menu, children }) => {
+export const Dropdown: React.FC<{
+  menu?: MenuProps;
+  overlay?: React.ReactNode;
+  placement?: 'bottomLeft' | 'bottomRight' | 'topLeft' | 'topRight' | string;
+  children: React.ReactNode;
+  trigger?: ('click' | 'hover')[];
+  open?: boolean;
+  disabled?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  overlayStyle?: React.CSSProperties;
+  dropdownRender?: (menu: React.ReactNode) => React.ReactNode;
+}> = ({ menu, overlay, children, open: openProp, disabled, placement = 'bottomRight', onOpenChange, overlayStyle, dropdownRender }) => {
   const [open, setOpen] = useState(false);
   const [computedPlacement, setComputedPlacement] = useState<'bottom' | 'top'>('bottom');
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const isControlled = openProp !== undefined;
+  const isDropdownOpen = isControlled ? !!openProp : open;
+  const { shouldRender, animClass, overlayRef, closeImmediately: closeDropdownImmediately } = useOverlayAnimation(isDropdownOpen, 140);
+
+  const setOpenState = (val: boolean) => {
+    if (!isControlled) setOpen(val);
+    onOpenChange?.(val);
+  };
+
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
+        setOpenState(false);
       }
     };
     document.addEventListener('mousedown', handleOutsideClick);
@@ -388,7 +600,7 @@ export const Dropdown: React.FC<{ menu?: MenuProps; placement?: string; children
   }, []);
 
   useEffect(() => {
-    if (open && containerRef.current) {
+    if (isDropdownOpen && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
       if (spaceBelow < 300 && rect.top > 300) {
@@ -397,41 +609,65 @@ export const Dropdown: React.FC<{ menu?: MenuProps; placement?: string; children
         setComputedPlacement('bottom');
       }
     }
-  }, [open]);
+  }, [isDropdownOpen]);
+
+  const defaultMenuEl = menu ? (
+    <Menu
+      items={menu.items}
+      selectedKeys={menu.selectedKeys}
+      onClick={(info) => {
+        closeDropdownImmediately();
+        setOpenState(false);
+        menu.onClick && menu.onClick(info);
+      }}
+      compact={true}
+      style={{
+        margin: 0,
+        padding: '4px 0',
+        maxHeight: menu.style?.maxHeight || 'none',
+        overflowY: menu.style?.overflowY || 'visible',
+        ...menu.style,
+      }}
+    />
+  ) : null;
+
+  const defaultContent = defaultMenuEl || overlay || null;
+  const menuContent = dropdownRender ? dropdownRender(defaultContent) : defaultContent;
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', display: 'inline-block' }}>
-      <div onClick={() => setOpen(!open)} style={{ cursor: 'pointer' }}>
+    <div ref={containerRef} style={{ position: 'relative', display: 'inline-block' }} onClick={(e) => e.stopPropagation()}>
+      <div
+        onClick={(e) => {
+          e.stopPropagation();
+          if (disabled) return;
+          setOpenState(!isDropdownOpen);
+        }}
+        style={{ cursor: disabled ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center' }}
+      >
         {children}
       </div>
-      {open && menu && (
+      {shouldRender && menuContent && (
         <div
-          className="custom-dropdown-menu"
+          ref={overlayRef}
+          className={`custom-dropdown-menu ${animClass === 'enter' ? 'k-pop-enter' : 'k-pop-exit'}`}
           style={{
             position: 'absolute',
-            right: 0,
-            top: 0,
-            bottom: 'auto',
-            marginTop: 0,
-            marginBottom: 0,
+            ...(placement === 'bottomLeft' || placement === 'topLeft'
+              ? { left: 0, right: 'auto' }
+              : { right: 0, left: 'auto' }),
+            ...(computedPlacement === 'top' 
+              ? { bottom: '100%', top: 'auto', marginBottom: 4 } 
+              : { top: '100%', bottom: 'auto', marginTop: 4 }),
             background: '#fff',
             border: '1px solid var(--antd-border)',
             borderRadius: 6,
             boxShadow: '0 6px 16px rgba(0, 0, 0, 0.08)',
             zIndex: 1000,
             minWidth: 150,
+            ...overlayStyle,
           }}
         >
-          <Menu
-            items={menu.items}
-            selectedKeys={menu.selectedKeys}
-            onClick={(info) => {
-              setOpen(false);
-              menu.onClick && menu.onClick(info);
-            }}
-            compact={true}
-            style={{ margin: 0, padding: '4px 0', maxHeight: menu.style?.maxHeight || 'none', overflowY: menu.style?.overflowY || 'visible' }}
-          />
+          {menuContent}
         </div>
       )}
     </div>
@@ -441,12 +677,16 @@ export const Dropdown: React.FC<{ menu?: MenuProps; placement?: string; children
 // ==========================================
 // 9. Spin
 // ==========================================
-export const Spin: React.FC<{ size?: 'small' | 'default' | 'large'; tip?: string; spinning?: boolean; children?: React.ReactNode }> = ({ size = 'default', tip, spinning = true, children }) => {
+export const Spin: React.FC<{ size?: 'small' | 'default' | 'large'; tip?: string; spinning?: boolean; children?: React.ReactNode; style?: React.CSSProperties }> = ({ size = 'default', tip, spinning = true, children, style }) => {
   if (!spinning) return <>{children}</>;
 
   return (
-    <div style={{ position: 'relative', display: children ? 'block' : 'inline-block' }}>
-      {children && <div style={{ opacity: 0.5, pointerEvents: 'none' }}>{children}</div>}
+    <div style={{ position: 'relative', display: children ? 'block' : 'inline-block', width: children ? '100%' : undefined, ...style }}>
+      {children && (
+        <div style={{ opacity: 0.45, pointerEvents: 'none', filter: 'blur(0.5px)', transition: 'all 0.2s ease-in-out', userSelect: 'none' }}>
+          {children}
+        </div>
+      )}
       <div
         className={`ant-spin ant-spin-spinning ant-spin-${size}`}
         style={{
@@ -454,12 +694,13 @@ export const Spin: React.FC<{ size?: 'small' | 'default' | 'large'; tip?: string
           top: '50%',
           left: '50%',
           transform: children ? 'translate(-50%, -50%)' : 'none',
-          zIndex: 4,
+          zIndex: 10,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 8,
+          gap: 10,
+          pointerEvents: 'none',
         }}
       >
         <span className="ant-spin-dot ant-spin-dot-spin">
@@ -468,7 +709,7 @@ export const Spin: React.FC<{ size?: 'small' | 'default' | 'large'; tip?: string
           <i className="ant-spin-dot-item"></i>
           <i className="ant-spin-dot-item"></i>
         </span>
-        {tip && <div style={{ color: 'var(--antd-primary)', fontSize: 14 }}>{tip}</div>}
+        {tip && <div style={{ color: 'var(--antd-primary, #009688)', fontSize: 13.5, fontWeight: 600, letterSpacing: '0.2px' }}>{tip}</div>}
       </div>
     </div>
   );
@@ -485,12 +726,15 @@ interface ButtonProps {
   shape?: 'circle' | 'round';
   loading?: boolean;
   onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  onMouseEnter?: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  onMouseLeave?: (e: React.MouseEvent<HTMLButtonElement>) => void;
   style?: React.CSSProperties;
   className?: string;
   htmlType?: 'submit' | 'button' | 'reset';
   children?: React.ReactNode;
   size?: 'small' | 'middle' | 'large';
   block?: boolean;
+  title?: string;
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -501,24 +745,33 @@ export const Button: React.FC<ButtonProps> = ({
   shape,
   loading,
   onClick,
+  onMouseEnter,
+  onMouseLeave,
   style,
   className = '',
   htmlType = 'button',
   children,
   size = 'middle',
   block,
+  title,
 }) => {
+  const modalCtx = useContext(ModalContext);
+  const isAutoLoading = htmlType === 'submit' && modalCtx?.isModalLoading;
+  const isLoading = Boolean(loading || isAutoLoading);
+  const isDisabled = Boolean(disabled || isLoading || modalCtx?.isModalLoading);
+
   const btnTypeClass = type ? `ant-btn-${type}` : '';
   const dangerClass = danger ? 'ant-btn-dangerous' : '';
   const shapeClass = shape ? `ant-btn-${shape}` : '';
-  const loadingClass = loading ? 'ant-btn-loading' : '';
+  const loadingClass = isLoading ? 'ant-btn-loading' : '';
   const sizeClass = size ? `ant-btn-${size}` : '';
   const blockClass = block ? 'ant-btn-block' : '';
 
   return (
     <button
       type={htmlType}
-      disabled={disabled || loading}
+      title={title}
+      disabled={isDisabled}
       onClick={onClick}
       className={`ant-btn ${btnTypeClass} ${dangerClass} ${shapeClass} ${loadingClass} ${sizeClass} ${blockClass} ${className}`}
       style={{
@@ -526,10 +779,11 @@ export const Button: React.FC<ButtonProps> = ({
         alignItems: 'center',
         justifyContent: 'center',
         gap: 8,
+        cursor: isDisabled ? (isLoading ? 'wait' : 'not-allowed') : 'pointer',
         ...style,
       }}
     >
-      {loading ? (
+      {isLoading ? (
         <span className="ant-btn-loading-icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
           <svg viewBox="0 0 50 50" style={{ width: 14, height: 14, animation: 'antSpin 1s linear infinite' }}>
             <circle cx="25" cy="25" r="20" fill="none" stroke="currentColor" strokeWidth="5" strokeDasharray="80, 200" strokeDashoffset="0" strokeLinecap="round" />
@@ -578,7 +832,7 @@ export const Divider: React.FC<{
 // ==========================================
 // 12. Badge
 // ==========================================
-export const Badge: React.FC<{ status?: 'success' | 'processing' | 'default' | 'error' | 'warning'; text?: React.ReactNode; count?: React.ReactNode; style?: React.CSSProperties; children?: React.ReactNode }> = ({ status, text, count, style, children }) => {
+export const Badge: React.FC<{ status?: 'success' | 'processing' | 'default' | 'error' | 'warning'; text?: React.ReactNode; count?: React.ReactNode; size?: 'default' | 'small' | string; style?: React.CSSProperties; children?: React.ReactNode }> = ({ status, text, count, size, style, children }) => {
   if (status) {
     return (
       <span className={`ant-badge ant-badge-status ant-badge-status-${status}`} style={style}>
@@ -621,21 +875,50 @@ export const Badge: React.FC<{ status?: 'success' | 'processing' | 'default' | '
 // ==========================================
 // 13. Tag
 // ==========================================
-export const Tag: React.FC<{ color?: string; style?: React.CSSProperties; children?: React.ReactNode; closable?: boolean; onClose?: () => void }> = ({ color, style, children, closable, onClose }) => {
-  const isPresetColor = color && ['default', 'success', 'processing', 'error', 'warning', 'blue', 'green', 'orange', 'red', 'cyan', 'purple'].includes(color);
-  const colorClass = isPresetColor ? `ant-tag-${color}` : '';
-  const customStyle = !isPresetColor && color ? { background: color, color: '#fff', borderColor: color } : {};
+export const Tag: React.FC<{ color?: string; icon?: React.ReactNode; style?: React.CSSProperties; children?: React.ReactNode; closable?: boolean; onClose?: () => void; onClick?: (e: any) => void; title?: string }> = ({ color, icon, style, children, closable, onClose, onClick, title }) => {
+  const PRESET_TAG_STYLES: Record<string, { bg: string; border: string; color: string }> = {
+    default: { bg: '#fafafa', border: '#d9d9d9', color: '#595959' },
+    success: { bg: '#f6ffed', border: '#b7eb8f', color: '#389e0d' },
+    processing: { bg: '#e6f7ff', border: '#91d5ff', color: '#096dd9' },
+    error: { bg: '#fff2f0', border: '#ffccc7', color: '#cf1322' },
+    warning: { bg: '#fffbe6', border: '#ffe58f', color: '#d48806' },
+    blue: { bg: '#e6f7ff', border: '#91d5ff', color: '#096dd9' },
+    green: { bg: '#f6ffed', border: '#b7eb8f', color: '#389e0d' },
+    orange: { bg: '#fffbe6', border: '#ffe58f', color: '#d48806' },
+    red: { bg: '#fff2f0', border: '#ffccc7', color: '#cf1322' },
+    cyan: { bg: '#e6fffb', border: '#87e8de', color: '#08979c' },
+    purple: { bg: '#f9f0ff', border: '#d3ade6', color: '#531dab' },
+    geekblue: { bg: '#f0f5ff', border: '#adc6ff', color: '#1d39c4' },
+    magenta: { bg: '#fff0f6', border: '#ffadd2', color: '#c41d7f' },
+    volcano: { bg: '#fff2e8', border: '#ffbb96', color: '#d4380d' },
+    gold: { bg: '#fffbe6', border: '#ffe58f', color: '#d48806' },
+    lime: { bg: '#fcffe6', border: '#eaff8f', color: '#7cb305' },
+  };
+
+  const presetStyle = color && PRESET_TAG_STYLES[color];
+  const customStyle = presetStyle
+    ? { background: presetStyle.bg, borderColor: presetStyle.border, color: presetStyle.color }
+    : color
+    ? { background: color, color: '#fff', borderColor: color }
+    : {};
 
   return (
-    <span className={`ant-tag ${colorClass}`} style={{ ...customStyle, ...style }}>
+    <span
+      className={`ant-tag ${presetStyle ? `ant-tag-${color}` : ''}`}
+      style={{ display: 'inline-flex', alignItems: 'center', ...customStyle, ...style }}
+      onClick={onClick}
+      title={title}
+    >
+      {icon && <span style={{ marginRight: 4, display: 'inline-flex', alignItems: 'center' }}>{icon}</span>}
       {children}
       {closable && (
         <span
+          className="ant-tag-close-icon"
           onClick={(e) => {
             e.stopPropagation();
             onClose && onClose();
           }}
-          style={{ marginLeft: 4, cursor: 'pointer', fontWeight: 'bold' }}
+          style={{ marginLeft: 4, cursor: 'pointer' }}
         >
           ×
         </span>
@@ -716,13 +999,14 @@ export const Alert: React.FC<{ message: React.ReactNode; description?: React.Rea
 // ==========================================
 // 15. Statistic
 // ==========================================
-export const Statistic: React.FC<{ title?: React.ReactNode; value?: number | string; prefix?: React.ReactNode; suffix?: React.ReactNode; valueStyle?: React.CSSProperties; style?: React.CSSProperties }> = ({ title, value, prefix, suffix, valueStyle, style }) => {
+export const Statistic: React.FC<{ title?: React.ReactNode; value?: number | string; precision?: number; prefix?: React.ReactNode; suffix?: React.ReactNode; valueStyle?: React.CSSProperties; style?: React.CSSProperties; loading?: boolean }> = ({ title, value, precision, prefix, suffix, valueStyle, style, loading }) => {
+  const displayValue = typeof value === 'number' && precision !== undefined ? value.toFixed(precision) : value;
   return (
     <div className="ant-statistic" style={style}>
       {title && <div className="ant-statistic-title" style={{ color: 'var(--antd-text-secondary)', marginBottom: 4, fontSize: 14 }}>{title}</div>}
       <div className="ant-statistic-content" style={{ display: 'flex', alignItems: 'baseline', fontSize: 24, fontWeight: 'bold', color: 'var(--antd-text)', ...valueStyle }}>
         {prefix && <span className="ant-statistic-content-prefix" style={{ marginRight: 4 }}>{prefix}</span>}
-        <span className="ant-statistic-content-value">{value}</span>
+        <span className="ant-statistic-content-value">{displayValue}</span>
         {suffix && <span className="ant-statistic-content-suffix" style={{ marginLeft: 4 }}>{suffix}</span>}
       </div>
     </div>
@@ -732,7 +1016,7 @@ export const Statistic: React.FC<{ title?: React.ReactNode; value?: number | str
 // ==========================================
 // 16. Progress
 // ==========================================
-export const Progress: React.FC<{ percent?: number; status?: 'success' | 'exception' | 'normal' | 'active'; size?: 'small' | 'default'; type?: 'line' | 'circle' | 'dashboard'; strokeColor?: string; style?: React.CSSProperties }> = ({ percent = 0, status, size, type = 'line', strokeColor, style }) => {
+export const Progress: React.FC<{ percent?: number; status?: 'success' | 'exception' | 'normal' | 'active'; size?: 'small' | 'default'; type?: 'line' | 'circle' | 'dashboard'; strokeColor?: string; showInfo?: boolean; style?: React.CSSProperties }> = ({ percent = 0, status, size, type = 'line', strokeColor, showInfo = true, style }) => {
   const isSmall = size === 'small';
   const height = isSmall ? 6 : 8;
 
@@ -763,7 +1047,7 @@ export const Progress: React.FC<{ percent?: number; status?: 'success' | 'except
             style={{ transition: 'stroke-dashoffset 0.3s ease' }}
           />
         </svg>
-        <span style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: 16, fontWeight: 'bold' }}>{percent}%</span>
+        {showInfo && <span style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: 16, fontWeight: 'bold' }}>{percent}%</span>}
       </div>
     );
   }
@@ -773,7 +1057,7 @@ export const Progress: React.FC<{ percent?: number; status?: 'success' | 'except
       <div style={{ flex: 1, background: '#f5f5f5', borderRadius: 100, height, overflow: 'hidden' }}>
         <div style={{ width: `${percent}%`, background: color, height: '100%', borderRadius: 100, transition: 'width 0.3s ease' }} />
       </div>
-      <span className="ant-progress-text" style={{ fontSize: 12, minWidth: 32 }}>{percent}%</span>
+      {showInfo && <span className="ant-progress-text" style={{ fontSize: 12, minWidth: 32 }}>{percent}%</span>}
     </div>
   );
 };
@@ -781,7 +1065,7 @@ export const Progress: React.FC<{ percent?: number; status?: 'success' | 'except
 // ==========================================
 // 17. Checkbox
 // ==========================================
-export const Checkbox: React.FC<{ checked?: boolean; onChange?: (e: any) => void; disabled?: boolean; children?: React.ReactNode; style?: React.CSSProperties }> = ({ checked, onChange, disabled, children, style }) => {
+export const Checkbox: React.FC<{ checked?: boolean; indeterminate?: boolean; onChange?: (e: any) => void; disabled?: boolean; children?: React.ReactNode; style?: React.CSSProperties }> = ({ checked, onChange, disabled, children, style }) => {
   const isChecked = !!checked;
   return (
     <label className={`ant-checkbox-wrapper ${disabled ? 'ant-checkbox-wrapper-disabled' : ''}`} style={{ display: 'inline-flex', alignItems: 'center', cursor: disabled ? 'not-allowed' : 'pointer', ...style }}>
@@ -803,16 +1087,32 @@ export const Checkbox: React.FC<{ checked?: boolean; onChange?: (e: any) => void
 // ==========================================
 // 18. Switch
 // ==========================================
-export const Switch: React.FC<{ checked?: boolean; onChange?: (checked: boolean) => void; disabled?: boolean; checkedChildren?: React.ReactNode; unCheckedChildren?: React.ReactNode; style?: React.CSSProperties }> = ({ checked, onChange, disabled, checkedChildren, unCheckedChildren, style }) => {
-  const isChecked = !!checked;
+interface SwitchProps {
+  checked?: boolean;
+  defaultChecked?: boolean;
+  onChange?: (checked: boolean) => void;
+  disabled?: boolean;
+  checkedChildren?: React.ReactNode;
+  unCheckedChildren?: React.ReactNode;
+  style?: React.CSSProperties;
+  size?: 'small' | 'default' | string;
+  className?: string;
+}
+
+export const Switch: React.FC<SwitchProps> = ({ checked, defaultChecked = false, onChange, disabled, checkedChildren, unCheckedChildren, style, size, className = '' }) => {
+  const [uncontrolledChecked, setUncontrolledChecked] = useState(defaultChecked);
+  const isChecked = checked ?? uncontrolledChecked;
   return (
     <button
       type="button"
       role="switch"
       aria-checked={isChecked}
       disabled={disabled}
-      onClick={() => onChange && onChange(!isChecked)}
-      className={`ant-switch ${isChecked ? 'ant-switch-checked' : ''} ${disabled ? 'ant-switch-disabled' : ''}`}
+      onClick={() => {
+        if (checked === undefined) setUncontrolledChecked(!isChecked);
+        onChange && onChange(!isChecked);
+      }}
+      className={`ant-switch ${size === 'small' ? 'ant-switch-small' : ''} ${isChecked ? 'ant-switch-checked' : ''} ${disabled ? 'ant-switch-disabled' : ''} ${className}`}
       style={style}
     >
       <div className="ant-switch-handle" />
@@ -826,18 +1126,39 @@ export const Switch: React.FC<{ checked?: boolean; onChange?: (checked: boolean)
 // ==========================================
 // 19. Input (Input, Password, Search, TextArea)
 // ==========================================
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'prefix' | 'size'> {
   prefix?: React.ReactNode;
   suffix?: React.ReactNode;
   allowClear?: boolean;
   onPressEnter?: React.KeyboardEventHandler<HTMLInputElement>;
+  bordered?: boolean;
+  size?: 'small' | 'middle' | 'large' | string;
 }
 
 export const Input: React.FC<InputProps> & {
   Password: React.FC<InputProps>;
   Search: React.FC<any>;
   TextArea: React.FC<any>;
-} = ({ prefix, suffix, allowClear, value, onChange, onPressEnter, style, className = '', ...props }) => {
+} = ({ prefix, suffix, allowClear, value, onChange, onPressEnter, bordered, style, className = '', size, ...props }) => {
+  const effectivePlaceholder = typeof props.placeholder === 'string'
+    ? props.placeholder.replace(/\s*\([tT][ùuỳ][yY]\s*[cC]họn\)/gi, '')
+    : props.placeholder;
+
+  if (props.type === 'date') {
+    return (
+      <DatePicker
+        value={value !== undefined ? String(value) : undefined}
+        onChange={(val) => {
+          onChange && onChange({ target: { value: val } } as any);
+        }}
+        placeholder={effectivePlaceholder || 'YYYY-MM-DD'}
+        disabled={props.disabled}
+        style={style}
+        className={className}
+      />
+    );
+  }
+
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -848,6 +1169,11 @@ export const Input: React.FC<InputProps> & {
 
   const hasAffix = prefix || suffix || allowClear;
 
+  const isBorderedFalse = bordered === false;
+  const mergedStyle: React.CSSProperties = isBorderedFalse
+    ? { border: 'none', outline: 'none', boxShadow: 'none', background: 'transparent', ...style }
+    : { ...style };
+
   if (!hasAffix) {
     return (
       <input
@@ -856,8 +1182,9 @@ export const Input: React.FC<InputProps> & {
         onChange={onChange}
         onKeyDown={handleKeyDown}
         className={`ant-input ${className}`}
-        style={style}
+        style={mergedStyle}
         {...props}
+        placeholder={effectivePlaceholder}
       />
     );
   }
@@ -865,7 +1192,7 @@ export const Input: React.FC<InputProps> & {
   return (
     <span
       className={`ant-input-affix-wrapper ${className}`}
-      style={style}
+      style={mergedStyle}
       onClick={() => inputRef.current?.focus()}
     >
       {prefix && <span style={{ marginRight: 8, display: 'inline-flex', alignItems: 'center' }}>{prefix}</span>}
@@ -875,6 +1202,7 @@ export const Input: React.FC<InputProps> & {
         onChange={onChange}
         onKeyDown={handleKeyDown}
         {...props}
+        placeholder={effectivePlaceholder}
       />
       {allowClear && value && (
         <span
@@ -939,12 +1267,16 @@ Input.Search = ({ onSearch, enterButton, ...props }) => {
 };
 
 Input.TextArea = ({ rows, style, ...props }) => {
+  const effectivePlaceholder = typeof props.placeholder === 'string'
+    ? props.placeholder.replace(/\s*\([tT][ùuỳ][yY]\s*[cC]họn\)/gi, '')
+    : props.placeholder;
   return (
     <textarea
       className="ant-input"
       rows={rows}
       style={{ width: '100%', resize: 'vertical', minHeight: rows ? rows * 20 : 160, ...style }}
       {...props}
+      placeholder={effectivePlaceholder}
     />
   );
 };
@@ -952,22 +1284,40 @@ Input.TextArea = ({ rows, style, ...props }) => {
 // ==========================================
 // 20. InputNumber
 // ==========================================
-export const InputNumber: React.FC<{ value?: number | null; onChange?: (val: number | null) => void; min?: number; max?: number; style?: React.CSSProperties; disabled?: boolean; placeholder?: string; className?: string }> = ({ value, onChange, min, max, style, disabled, placeholder, className = '' }) => {
+export const InputNumber: React.FC<{
+  value?: number | null;
+  defaultValue?: number | null;
+  onChange?: (val: number | null) => void;
+  min?: number;
+  max?: number;
+  step?: number | string;
+  addonAfter?: React.ReactNode;
+  suffix?: React.ReactNode;
+  style?: React.CSSProperties;
+  disabled?: boolean;
+  placeholder?: string;
+  className?: string;
+}> = ({ value, defaultValue, onChange, min, max, step, addonAfter, suffix, style, disabled, placeholder, className = '' }) => {
+  const [internalVal, setInternalVal] = useState<number | null>(defaultValue ?? null);
+  const currentVal = value !== undefined ? value : internalVal;
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let num: number | null = e.target.value === '' ? null : Number(e.target.value);
     if (num !== null && !isNaN(num)) {
       if (min !== undefined && num < min) num = min;
       if (max !== undefined && num > max) num = max;
+      if (value === undefined) setInternalVal(num);
       onChange && onChange(num);
     } else if (e.target.value === '') {
+      if (value === undefined) setInternalVal(null);
       onChange && onChange(null);
     }
   };
 
-  return (
+  const inputEl = (
     <input
       type="number"
-      value={value === null || value === undefined ? '' : value}
+      value={currentVal === null || currentVal === undefined ? '' : currentVal}
       onChange={handleChange}
       disabled={disabled}
       placeholder={placeholder}
@@ -975,15 +1325,31 @@ export const InputNumber: React.FC<{ value?: number | null; onChange?: (val: num
       style={{ width: 90, ...style }}
       min={min}
       max={max}
+      step={step}
     />
   );
+
+  if (addonAfter || suffix) {
+    return (
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        {inputEl}
+        {(addonAfter || suffix) && (
+          <span style={{ fontSize: 12, color: '#64748B', fontWeight: 500 }}>
+            {addonAfter || suffix}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  return inputEl;
 };
 
 // ==========================================
 // 21. Select
 // ==========================================
-export const DownOutlined = () => (
-  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ transition: 'none', color: 'rgba(0, 0, 0, 0.25)', flexShrink: 0 }}>
+export const DownOutlined: React.FC<{ style?: React.CSSProperties }> = ({ style }) => (
+  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ transition: 'none', color: 'rgba(0, 0, 0, 0.25)', flexShrink: 0, ...style }}>
     <path d="M1.5 3.5L5 7L8.5 3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
@@ -995,20 +1361,25 @@ interface SelectOption {
 
 interface SelectProps {
   value?: any;
+  defaultValue?: any;
   onChange?: (value: any) => void;
   options?: SelectOption[];
   placeholder?: string;
   style?: React.CSSProperties;
   disabled?: boolean;
   mode?: 'multiple' | 'tags';
+  maxTagCount?: number | 'responsive';
+  allowClear?: boolean;
   showSearch?: boolean;
   filterOption?: any;
   className?: string;
   size?: 'small' | 'middle' | 'large';
+  notFoundContent?: React.ReactNode;
 }
 
 export const Select: React.FC<SelectProps> = ({
   value,
+  defaultValue,
   onChange,
   options = [],
   placeholder = 'Select...',
@@ -1018,8 +1389,17 @@ export const Select: React.FC<SelectProps> = ({
   className = '',
   size = 'middle',
 }) => {
+  const [internalVal, setInternalVal] = useState<any>(defaultValue);
+
+  useEffect(() => {
+    setInternalVal(value);
+  }, [value]);
+
+  const resolvedValue = value !== undefined ? value : internalVal;
   const [open, setOpen] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState<{ rectTop: number; viewportHeight: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
@@ -1031,86 +1411,69 @@ export const Select: React.FC<SelectProps> = ({
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
+  // Snapshot value when open changes so position never shifts when user selects another option
+  const openValueRef = useRef<any>(resolvedValue);
+
+  // Measure trigger element bounding rect when open changes
+  useEffect(() => {
+    if (open && containerRef.current) {
+      openValueRef.current = resolvedValue;
+      const rect = containerRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        rectTop: rect.top,
+        viewportHeight: window.innerHeight,
+      });
+    }
+  }, [open]);
+
   const isMultiple = mode === 'multiple' || mode === 'tags';
-  const values = isMultiple ? (Array.isArray(value) ? value : (value ? [value] : [])) : [value];
+  const hasValue = resolvedValue !== undefined && resolvedValue !== null && resolvedValue !== '';
+  const values = isMultiple
+    ? (Array.isArray(resolvedValue) ? resolvedValue : (hasValue ? [resolvedValue] : []))
+    : (hasValue ? [resolvedValue] : []);
 
-  const ITEM_HEIGHT = size === 'small' ? 26 : 32;
-  const triggerHeight = size === 'small' ? 26 : size === 'large' ? 40 : 32;
+  const ITEM_HEIGHT = size === 'small' ? 24 : 32;
+  const triggerHeight = size === 'small' ? 24 : size === 'large' ? 40 : 32;
   const dropdownHeight = options.length * ITEM_HEIGHT;
-  const selIdx = !isMultiple ? options.findIndex(o => String(o.value) === String(value)) : -1;
+
+  // Viewport and Navbar height calculations
+  const rectTop = dropdownPosition ? dropdownPosition.rectTop : 0;
+  const viewportHeight = dropdownPosition ? dropdownPosition.viewportHeight : window.innerHeight;
+  const navbarHeight = 56;
+  const safeTop = navbarHeight + 20;
+  const safeBottom = viewportHeight - 20;
+  const maxVisibleHeight = Math.max(100, safeBottom - safeTop);
+  const visibleHeight = Math.min(dropdownHeight + 2, maxVisibleHeight);
+
+  // Use openValueRef.current for positioning so clicking an option does not jump/shift dropdown position
+  const positionValue = open ? openValueRef.current : (openValueRef.current !== undefined ? openValueRef.current : resolvedValue);
+  const selIdx = !isMultiple ? options.findIndex(o => String(o.value) === String(positionValue)) : -1;
   const activeIndex = selIdx >= 0 ? selIdx : 0;
-  
-  // scrollOffset lưu lượng dịch chuyển cuộn do người dùng thao tác
-  const [scrollOffset, setScrollOffset] = useState(0);
 
-  // Vị trí ban đầu đè tâm item được chọn lên tâm trigger
-  const initialTop = Math.round((triggerHeight / 2) - (activeIndex * ITEM_HEIGHT + ITEM_HEIGHT / 2));
+  const idealScrollTop = activeIndex * ITEM_HEIGHT - (visibleHeight / 2 - ITEM_HEIGHT / 2);
+  const boundedScrollTop = Math.max(0, Math.min(dropdownHeight - visibleHeight, idealScrollTop));
 
-  // Giới hạn biên tuyệt đối để trùm khít qua border trigger ở cả đầu trên và đầu dưới (đè tâm lý tưởng, dịch xuống thêm 1px nữa)
-  const minTop = dropdownHeight > triggerHeight ? triggerHeight - dropdownHeight + 4 : -4;
-  const maxTop = -4;
-  
-  // Vị trí hiển thị thực tế ban đầu (được tính toán đồng bộ ngay lập tức trước khi render)
-  const initialBoundedTop = Math.max(minTop, Math.min(maxTop, initialTop));
-  
-  // Vị trí top hiển thị thực tế
-  const currentTop = initialBoundedTop + scrollOffset;
+  const idealTop = (triggerHeight / 2) - (activeIndex * ITEM_HEIGHT + ITEM_HEIGHT / 2 - boundedScrollTop);
 
-  // Reset scrollOffset và đo đạc lại khi đóng/mở hoặc thay đổi giá trị chọn
-  useEffect(() => {
-    setScrollOffset(0);
-  }, [open, value]);
+  const minTop = safeTop - rectTop;
+  const maxTop = safeBottom - rectTop - visibleHeight;
+  const boundedTop = Math.max(minTop, Math.min(maxTop, idealTop));
 
-  if (open) {
-    console.log('[Select Debug]', {
-      size,
-      optionsLength: options.length,
-      value,
-      activeIndex,
-      ITEM_HEIGHT,
-      triggerHeight,
-      dropdownHeight,
-      initialTop,
-      minTop,
-      maxTop,
-      initialBoundedTop,
-      currentTop
-    });
-  }
+  const initialScrollTop = Math.max(0, Math.min(dropdownHeight - visibleHeight, boundedScrollTop - (idealTop - boundedTop)));
+  const isScrollable = dropdownHeight > maxVisibleHeight;
 
-  // Xử lý sự kiện cuộn chuột trên dropdown bằng requestAnimationFrame để siêu mượt
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = dropdownRef.current;
-    if (!el) return;
-
-    let ticking = false;
-    let accumulatedDelta = 0;
-
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault(); // Ngăn cuộn trang web
-      accumulatedDelta += e.deltaY;
-
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          setScrollOffset(prev => {
-            const nextOffset = prev - accumulatedDelta;
-            accumulatedDelta = 0;
-            // Giới hạn sao cho: minTop <= initialBoundedTop + nextOffset <= maxTop
-            const nextTop = initialBoundedTop + nextOffset;
-            const boundedTop = Math.max(minTop, Math.min(maxTop, nextTop));
-            return boundedTop - initialBoundedTop;
-          });
-          ticking = false;
-        });
-        ticking = true;
+  // Scroll active item into view synchronously before paint to prevent jump/stutter
+  React.useLayoutEffect(() => {
+    if (open && dropdownPosition && dropdownRef.current) {
+      if (isScrollable) {
+        dropdownRef.current.scrollTop = initialScrollTop;
+      } else {
+        dropdownRef.current.scrollTop = 0;
       }
-    };
+    }
+  }, [open, dropdownPosition, initialScrollTop, isScrollable]);
 
-    el.addEventListener('wheel', handleWheel, { passive: false });
-    return () => el.removeEventListener('wheel', handleWheel);
-  }, [open, initialBoundedTop, minTop, maxTop]);
-
+  const { shouldRender: shouldRenderSelect, animClass: selectAnimClass, overlayRef: selectOverlayRef, closeImmediately: closeSelectImmediately } = useOverlayAnimation(open, 130);
 
   const handleSelect = (val: any) => {
     if (disabled) return;
@@ -1118,9 +1481,14 @@ export const Select: React.FC<SelectProps> = ({
       const nextValues = values.includes(val)
         ? values.filter(v => String(v) !== String(val))
         : [...values, val];
+      setInternalVal(nextValues);
       onChange && onChange(nextValues);
     } else {
-      onChange && onChange(val);
+      const isAlreadySelected = hasValue && String(resolvedValue) === String(val);
+      const nextVal = isAlreadySelected ? undefined : val;
+      setInternalVal(nextVal);
+      onChange && onChange(nextVal);
+      closeSelectImmediately();
       setOpen(false);
     }
   };
@@ -1129,6 +1497,7 @@ export const Select: React.FC<SelectProps> = ({
     e.stopPropagation();
     if (disabled) return;
     const nextValues = values.filter(v => String(v) !== String(val));
+    setInternalVal(nextValues);
     onChange && onChange(nextValues);
   };
 
@@ -1136,12 +1505,9 @@ export const Select: React.FC<SelectProps> = ({
     <div
       ref={containerRef}
       className={`ant-select ${open ? 'ant-select-open ant-select-focused' : ''} ${disabled ? 'ant-select-disabled' : ''} ${isMultiple ? 'ant-select-multiple' : ''} ${className}`}
-      style={style}
+      style={{ ...style, position: 'relative' }}
       onClick={() => {
         if (!disabled) {
-          if (!open) {
-            setScrollOffset(0);
-          }
           setOpen(!open);
         }
       }}
@@ -1164,7 +1530,7 @@ export const Select: React.FC<SelectProps> = ({
           )
         ) : (
           (() => {
-            const selectedOption = options.find(o => String(o.value) === String(value));
+            const selectedOption = options.find(o => String(o.value) === String(resolvedValue));
             return (
               <span 
                 className={selectedOption ? "ant-select-selection-item" : "ant-select-selection-placeholder"}
@@ -1187,13 +1553,28 @@ export const Select: React.FC<SelectProps> = ({
           <DownOutlined />
         </span>
       </div>
-      {open && !disabled && (
+      {shouldRenderSelect && dropdownPosition && !disabled && (
         <div
-          ref={dropdownRef}
-          className={`ant-select-dropdown ${size === 'small' ? 'ant-select-dropdown-small' : ''}`}
+          ref={(node) => {
+            dropdownRef.current = node;
+            selectOverlayRef.current = node;
+          }}
+          className={`ant-select-dropdown ${size === 'small' ? 'ant-select-dropdown-small' : ''} ${selectAnimClass === 'enter' ? 'k-select-enter' : 'k-select-exit'}`}
           style={{
-            top: `${currentTop}px`,
-            overflowY: 'hidden',
+            position: 'absolute',
+            top: `${boundedTop}px`,
+            left: -1,
+            width: 'calc(100% + 2px)',
+            height: isScrollable ? `${visibleHeight}px` : 'auto',
+            maxHeight: `${maxVisibleHeight}px`,
+            overflowY: isScrollable ? 'auto' : 'hidden',
+            overflowX: 'hidden',
+            zIndex: 1070,
+            background: '#fff',
+            border: '1px solid var(--antd-border)',
+            borderRadius: 'var(--antd-radius-base)',
+            boxShadow: 'var(--antd-shadow-dropdown)',
+            boxSizing: 'border-box',
           }}
         >
           {options.map((opt) => {
@@ -1210,17 +1591,22 @@ export const Select: React.FC<SelectProps> = ({
                   lineHeight: `${ITEM_HEIGHT}px`,
                   fontSize: size === 'small' ? '12px' : '14px',
                   padding: size === 'small' ? '0 8px' : '0 12px',
-                  boxSizing: 'border-box'
+                  boxSizing: 'border-box',
+                  cursor: 'pointer'
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleSelect(opt.value);
                 }}
               >
-                <span>{opt.label !== undefined ? opt.label : String(opt.value)}</span>
-                {isMultiple && isSelected && (
-                  <span className="ant-select-item-option-state-icon" style={{ color: '#009688', fontWeight: 'bold' }}>
-                    ✓
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', flex: 1, marginRight: 8 }}>
+                  {opt.label !== undefined ? opt.label : String(opt.value)}
+                </span>
+                {isSelected && (
+                  <span className="ant-select-item-option-state-icon" style={{ color: 'var(--antd-primary, #009688)', display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
+                    <svg width={size === 'small' ? 11 : 12} height={size === 'small' ? 11 : 12} viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M10 3L4.5 8.5L2 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
                   </span>
                 )}
               </div>
@@ -1250,6 +1636,7 @@ export const CompactSelect: React.FC<Omit<SelectProps, 'mode' | 'showSearch' | '
   const [open, setOpen] = useState(false);
   const [flipUp, setFlipUp] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { shouldRender: shouldRenderCompact, animClass: compactAnimClass, overlayRef: compactOverlayRef, closeImmediately: closeCompactImmediately } = useOverlayAnimation(open, 130);
 
   // Close on outside click
   useEffect(() => {
@@ -1276,7 +1663,10 @@ export const CompactSelect: React.FC<Omit<SelectProps, 'mode' | 'showSearch' | '
 
   const handleSelect = (val: any) => {
     if (disabled) return;
-    onChange && onChange(val);
+    const isAlreadySelected = value !== undefined && value !== null && value !== '' && String(value) === String(val);
+    const nextVal = isAlreadySelected ? undefined : val;
+    onChange && onChange(nextVal);
+    closeCompactImmediately();
     setOpen(false);
   };
 
@@ -1309,22 +1699,42 @@ export const CompactSelect: React.FC<Omit<SelectProps, 'mode' | 'showSearch' | '
         <DownOutlined />
       </div>
 
-      {open && !disabled && (
+      {shouldRenderCompact && !disabled && (
         <div
-          className="compact-select-dropdown"
-          style={flipUp ? { bottom: triggerHeight - 1 } : { top: triggerHeight - 1 }}
+          ref={compactOverlayRef}
+          className={`compact-select-dropdown ${compactAnimClass === 'enter' ? 'k-select-enter' : 'k-select-exit'}`}
+          style={{
+            ...(flipUp ? { bottom: triggerHeight - 1 } : { top: triggerHeight - 1 }),
+          }}
           onClick={e => e.stopPropagation()}
         >
           {options.map((opt) => {
-            const isSelected = String(opt.value) === String(value);
+            const isSelected = value !== undefined && value !== null && value !== '' && String(opt.value) === String(value);
             return (
               <div
                 key={String(opt.value)}
                 className={`compact-select-item${isSelected ? ' compact-select-item-selected' : ''}`}
-                style={{ fontSize: size === 'small' ? 12 : 13, padding: size === 'small' ? '3px 12px' : '4px 12px' }}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  fontSize: size === 'small' ? 12 : 13,
+                  padding: size === 'small' ? '3px 12px' : '4px 12px',
+                  boxSizing: 'border-box',
+                  cursor: 'pointer',
+                }}
                 onClick={() => handleSelect(opt.value)}
               >
-                {opt.label !== undefined ? opt.label : String(opt.value)}
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>
+                  {opt.label !== undefined ? opt.label : String(opt.value)}
+                </span>
+                {isSelected && (
+                  <span className="compact-select-item-check" style={{ color: 'var(--antd-primary, #009688)', display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
+                    <svg width={size === 'small' ? 11 : 12} height={size === 'small' ? 11 : 12} viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M10 3L4.5 8.5L2 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </span>
+                )}
               </div>
             );
           })}
@@ -1335,19 +1745,7 @@ export const CompactSelect: React.FC<Omit<SelectProps, 'mode' | 'showSearch' | '
 };
 
 
-// ==========================================
-export const DatePicker: React.FC<{ value?: any; onChange?: (val: any) => void; style?: React.CSSProperties; disabled?: boolean }> = ({ value, onChange, style, disabled }) => {
-  return (
-    <input
-      type="date"
-      value={value ? String(value).split('T')[0] : ''}
-      onChange={(e) => onChange && onChange(e.target.value)}
-      disabled={disabled}
-      className="ant-input"
-      style={style}
-    />
-  );
-};
+
 
 // ==========================================
 // 23. Slider
@@ -1369,8 +1767,9 @@ export const Slider: React.FC<{ value?: number; onChange?: (val: number) => void
 // ==========================================
 // 24. ColorPicker
 // ==========================================
-export const ColorPicker: React.FC<{ value?: any; onChange?: (val: any) => void; disabled?: boolean; style?: React.CSSProperties }> = ({ value = '#009688', onChange, disabled, style }) => {
-  const hexVal = typeof value === 'object' && value?.toHexString ? value.toHexString() : String(value);
+export const ColorPicker: React.FC<{ value?: any; defaultValue?: any; onChange?: (val: any) => void; disabled?: boolean; style?: React.CSSProperties }> = ({ value, defaultValue, onChange, disabled, style }) => {
+  const effectiveVal = value ?? defaultValue ?? '#009688';
+  const hexVal = typeof effectiveVal === 'object' && effectiveVal?.toHexString ? effectiveVal.toHexString() : String(effectiveVal);
   return (
     <input
       type="color"
@@ -1394,7 +1793,11 @@ export const ColorPicker: React.FC<{ value?: any; onChange?: (val: any) => void;
 // ==========================================
 // 25. Card
 // ==========================================
-export const Card: React.FC<any> = ({ title, extra, children, style, className = '', actions, cover, bodyStyle, styles }) => {
+export interface CardComponent extends React.FC<any> {
+  Meta: React.FC<any>;
+}
+
+const CardBase: React.FC<any> = ({ title, extra, children, style, className = '', actions, cover, bodyStyle, styles }) => {
   const mergedBodyStyle = { ...bodyStyle, ...(styles?.body || {}) };
   return (
     <div className={`ant-card ${className}`} style={style}>
@@ -1421,13 +1824,28 @@ export const Card: React.FC<any> = ({ title, extra, children, style, className =
   );
 };
 
+export const Card: CardComponent = Object.assign(CardBase, {
+  Meta: ({ avatar, title, description, style, className = '' }: any) => {
+    return (
+      <div className={`ant-card-meta ${className}`} style={{ display: 'flex', gap: 12, alignItems: 'center', ...style }}>
+        {avatar && <div className="ant-card-meta-avatar">{avatar}</div>}
+        <div className="ant-card-meta-detail" style={{ flex: 1, minWidth: 0 }}>
+          {title && <div className="ant-card-meta-title" style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{title}</div>}
+          {description && <div className="ant-card-meta-description" style={{ color: 'var(--antd-text-secondary)', fontSize: 13 }}>{description}</div>}
+        </div>
+      </div>
+    );
+  }
+});
+
 // ==========================================
 // 26. Form & Form.Item
 // ==========================================
 const FormContext = createContext<{
   values: any;
   setFieldValue: (name: string, value: any) => void;
-}>({ values: {}, setFieldValue: () => { } });
+  isSubmitting?: boolean;
+}>({ values: {}, setFieldValue: () => { }, isSubmitting: false });
 
 class FormStore {
   private values: any = {};
@@ -1443,8 +1861,17 @@ class FormStore {
     return this.values;
   }
 
+  getFieldValue(name: string) {
+    return this.values ? this.values[name] : undefined;
+  }
+
   setFieldsValue(newValues: any) {
     this.values = { ...this.values, ...newValues };
+    this.notify();
+  }
+
+  setFieldValue(name: string, value: any) {
+    this.values = { ...this.values, [name]: value };
     this.notify();
   }
 
@@ -1492,6 +1919,8 @@ export const Form: React.FC<any> & { Item: React.FC<any>; useForm: typeof useFor
 }) => {
   const [localForm] = useForm();
   const form = formProp || localForm;
+  const modalCtx = useContext(ModalContext);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [, forceUpdate] = useState({});
   useEffect(() => {
@@ -1504,14 +1933,35 @@ export const Form: React.FC<any> & { Item: React.FC<any>; useForm: typeof useFor
     form.setFieldsValue({ [name]: value });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onFinish && onFinish(form.getFieldsValue());
+    if (isSubmitting || modalCtx?.isModalLoading) return;
+    setIsSubmitting(true);
+    if (modalCtx?.setModalLoading) modalCtx.setModalLoading(true);
+    try {
+      if (onFinish) {
+        const res = onFinish(form.getFieldsValue());
+        if (res instanceof Promise) {
+          await res;
+        }
+      }
+    } finally {
+      setIsSubmitting(false);
+      if (modalCtx?.setModalLoading) modalCtx.setModalLoading(false);
+    }
   };
 
   return (
-    <FormContext.Provider value={{ values: form.getFieldsValue(), setFieldValue }}>
-      <form onSubmit={handleSubmit} autoComplete={autoComplete} className={`ant-form ant-form-${layout || 'horizontal'}`} style={style}>
+    <FormContext.Provider value={{ values: form.getFieldsValue(), setFieldValue, isSubmitting: isSubmitting || Boolean(modalCtx?.isModalLoading) }}>
+      <form
+        onSubmit={handleSubmit}
+        autoComplete={autoComplete}
+        className={`ant-form ant-form-${layout || 'horizontal'}`}
+        style={{
+          ...style,
+          pointerEvents: (isSubmitting || modalCtx?.isModalLoading) ? 'none' : 'auto',
+        }}
+      >
         {children}
       </form>
     </FormContext.Provider>
@@ -1520,15 +1970,26 @@ export const Form: React.FC<any> & { Item: React.FC<any>; useForm: typeof useFor
 
 Form.useForm = useForm;
 
-Form.Item = ({ name, label, rules, valuePropName = 'value', children, style }) => {
+Form.Item = ({ name, label, rules, valuePropName = 'value', children, style, autoCode = false }) => {
   const { values, setFieldValue } = useContext(FormContext);
+  const formChild = React.isValidElement(children) ? children as React.ReactElement<any> : null;
+  const isTextInput = formChild?.type === Input || formChild?.type === Input.TextArea;
+  const isAutoGeneratedCode = typeof name === 'string' && isTextInput && isSystemGeneratedCodeField(name, autoCode);
+
+  useEffect(() => {
+    if (!isAutoGeneratedCode || !name || values[name]) return;
+    setFieldValue(name, createSystemCode(name, label));
+  }, [isAutoGeneratedCode, label, name, setFieldValue, values, values[name]]);
 
   let child: React.ReactNode = children;
-  if (name && React.isValidElement(children)) {
+  if (name && formChild) {
     const childVal = values[name];
     const childProps: any = {
       [valuePropName]: childVal !== undefined ? childVal : '',
+      readOnly: isAutoGeneratedCode || formChild.props.readOnly,
+      title: isAutoGeneratedCode ? 'Mã do hệ thống tự tạo và không thể chỉnh sửa.' : formChild.props.title,
       onChange: (e: any) => {
+        if (isAutoGeneratedCode) return;
         let newVal = e;
         if (e && e.target) {
           if (e.target.type === 'checkbox') {
@@ -1538,12 +1999,30 @@ Form.Item = ({ name, label, rules, valuePropName = 'value', children, style }) =
           }
         }
         setFieldValue(name, newVal);
-        if (children.props.onChange) {
-          children.props.onChange(e);
+        if (formChild.props.onChange) {
+          formChild.props.onChange(e);
         }
       }
     };
-    child = React.cloneElement(children, childProps);
+    child = React.cloneElement(formChild, childProps);
+  }
+
+  const childVal = name ? values[name] : undefined;
+  const isRequired = rules?.some((r: any) => r?.required);
+  const isFilled = childVal !== undefined && childVal !== null && String(childVal).trim() !== '';
+
+  let labelNode = label;
+  if (typeof label === 'string') {
+    const hasAsterisk = isRequired || label.includes('*');
+    const cleanText = label.replace(/\s*\*\s*$/, '').trim();
+    labelNode = (
+      <>
+        {cleanText}
+        {hasAsterisk && !isFilled && (
+          <span style={{ color: '#EF4444', marginLeft: 4, fontWeight: 700 }}>*</span>
+        )}
+      </>
+    );
   }
 
   return (
@@ -1551,7 +2030,7 @@ Form.Item = ({ name, label, rules, valuePropName = 'value', children, style }) =
       <div className="ant-form-item-row">
         {label && (
           <div className="ant-form-item-label">
-            <label>{label}</label>
+            <label>{labelNode}</label>
           </div>
         )}
         <div className="ant-form-item-control">
@@ -1561,6 +2040,87 @@ Form.Item = ({ name, label, rules, valuePropName = 'value', children, style }) =
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+};
+
+const TableFilterDropdown: React.FC<{
+  isOpen: boolean;
+  filterDropdownRef: React.RefObject<HTMLDivElement>;
+  filters: any[];
+  tempSelectedFilters: any[];
+  setTempSelectedFilters: React.Dispatch<React.SetStateAction<any[]>>;
+  onApply: (selected: any[]) => void;
+}> = ({ isOpen, filterDropdownRef, filters, tempSelectedFilters, setTempSelectedFilters, onApply }) => {
+  const { shouldRender, animClass, overlayRef: filterOverlayRef } = useOverlayAnimation(isOpen, 130);
+  if (!shouldRender) return null;
+
+  return (
+    <div
+      ref={(node) => {
+        if (typeof filterDropdownRef === 'function') (filterDropdownRef as any)(node);
+        else if (filterDropdownRef) (filterDropdownRef as any).current = node;
+        filterOverlayRef.current = node;
+      }}
+      className={`${animClass === 'enter' ? 'k-pop-enter' : 'k-pop-exit'}`}
+      style={{
+        position: 'absolute',
+        right: 0,
+        top: '100%',
+        marginTop: 8,
+        background: '#fff',
+        border: '1px solid var(--antd-border)',
+        borderRadius: 4,
+        boxShadow: '0 6px 16px rgba(0, 0, 0, 0.08)',
+        padding: 8,
+        zIndex: 1000,
+        minWidth: 145,
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 150, overflowY: 'auto', paddingBottom: 8 }}>
+        {filters && filters.map((filterOpt: any) => {
+          const isChecked = tempSelectedFilters.includes(filterOpt.value);
+          return (
+            <Checkbox
+              key={String(filterOpt.value)}
+              checked={isChecked}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  setTempSelectedFilters([...tempSelectedFilters, filterOpt.value]);
+                } else {
+                  setTempSelectedFilters(tempSelectedFilters.filter((v: any) => v !== filterOpt.value));
+                }
+              }}
+            >
+              {filterOpt.text}
+            </Checkbox>
+          );
+        })}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #f0f0f0', paddingTop: 6, gap: 8 }}>
+        <Button
+          size="small"
+          type="link"
+          style={{ padding: 0, fontSize: 12, border: 'none', background: 'transparent', color: 'var(--antd-text-secondary)', height: 'auto' }}
+          onClick={() => {
+            setTempSelectedFilters([]);
+            onApply([]);
+          }}
+        >
+          Reset
+        </Button>
+        <Button
+          size="small"
+          type="primary"
+          style={{ fontSize: 12, height: 22, padding: '0 8px' }}
+          onClick={() => {
+            onApply(tempSelectedFilters);
+          }}
+        >
+          OK
+        </Button>
       </div>
     </div>
   );
@@ -1582,6 +2142,7 @@ export interface TableProps<T = any> {
   size?: 'large' | 'middle' | 'small';
   onRow?: (record: T, index?: number) => React.HTMLAttributes<any>;
   rowClassName?: (record: T, index: number) => string;
+  scroll?: { x?: number | string; y?: number | string };
 }
 
 export function Table<T = any>({
@@ -1597,6 +2158,7 @@ export function Table<T = any>({
   size = 'small',
   onRow,
   rowClassName,
+  scroll,
 }: TableProps<T>) {
   const [sortColumnKey, setSortColumnKey] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'ascend' | 'descend' | null>(null);
@@ -1751,19 +2313,24 @@ export function Table<T = any>({
     </svg>
   );
 
+  const tableMinWidth = scroll?.x && scroll.x !== 'max-content' ? scroll.x : '100%';
+
   return (
-    <div className={`ant-table-wrapper ${sizeClass} ${className}`} style={style}>
+    <div
+      className={`ant-table-wrapper ${sizeClass} ${className}`}
+      style={{ ...style, width: '100%', maxWidth: '100%', minWidth: 0 }}
+    >
       <div className="ant-spin-nested-loading">
         <div className="ant-spin-container">
           <Spin spinning={!!loading}>
             <div className="ant-table">
               <div className="ant-table-container">
-                <div className="ant-table-content" style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <div className="ant-table-content" style={{ overflowX: 'auto', overflowY: scroll?.y ? 'auto' : undefined, maxHeight: scroll?.y, width: '100%', maxWidth: '100%', minWidth: 0 }}>
+                  <table style={{ width: '100%', minWidth: tableMinWidth, borderCollapse: 'separate', borderSpacing: 0 }}>
                     <thead className="ant-table-thead">
                       <tr>
                         {rowSelection && (
-                          <th className="ant-table-selection-column" style={{ width: 32, padding: 8, textAlign: 'center' }}>
+                          <th className="ant-table-selection-column" style={{ width: rowSelection.columnWidth || 28, minWidth: rowSelection.columnWidth || 28, padding: '8px 2px 8px 8px', textAlign: 'center', borderBottom: '1px solid var(--antd-border, #E0E0E0)' }}>
                             <Checkbox checked={isAllSelected} onChange={(e) => handleSelectAll(e, pageData)} />
                           </th>
                         )}
@@ -1817,82 +2384,33 @@ export function Table<T = any>({
                                     <FilterIcon active={isFiltered} />
                                   </span>
 
-                                  {openFilterColumnKey === colKey && (
-                                    <div
-                                      ref={filterDropdownRef}
-                                      style={{
-                                        position: 'absolute',
-                                        right: 0,
-                                        top: '100%',
-                                        marginTop: 8,
-                                        background: '#fff',
-                                        border: '1px solid var(--antd-border)',
-                                        borderRadius: 4,
-                                        boxShadow: '0 6px 16px rgba(0, 0, 0, 0.08)',
-                                        padding: 8,
-                                        zIndex: 1000,
-                                        minWidth: 145,
-                                      }}
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 150, overflowY: 'auto', paddingBottom: 8 }}>
-                                        {col.filters.map((filterOpt: any) => {
-                                          const isChecked = tempSelectedFilters.includes(filterOpt.value);
-                                          return (
-                                            <Checkbox
-                                              key={String(filterOpt.value)}
-                                              checked={isChecked}
-                                              onChange={(e) => {
-                                                if (e.target.checked) {
-                                                  setTempSelectedFilters([...tempSelectedFilters, filterOpt.value]);
-                                                } else {
-                                                  setTempSelectedFilters(tempSelectedFilters.filter((v: any) => v !== filterOpt.value));
-                                                }
-                                              }}
-                                            >
-                                              {filterOpt.text}
-                                            </Checkbox>
-                                          );
-                                        })}
-                                      </div>
-                                      <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #f0f0f0', paddingTop: 6, gap: 8 }}>
-                                        <Button
-                                          size="small"
-                                          type="link"
-                                          style={{ padding: 0, fontSize: 12, border: 'none', background: 'transparent', color: 'var(--antd-text-secondary)', height: 'auto' }}
-                                          onClick={() => {
-                                            setTempSelectedFilters([]);
-                                            handleApplyFilters(colKey, []);
-                                          }}
-                                        >
-                                          Reset
-                                        </Button>
-                                        <Button
-                                          size="small"
-                                          type="primary"
-                                          style={{ fontSize: 12, height: 22, padding: '0 8px' }}
-                                          onClick={() => {
-                                            handleApplyFilters(colKey, tempSelectedFilters);
-                                          }}
-                                        >
-                                          OK
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  )}
+                                  <TableFilterDropdown
+                                    isOpen={openFilterColumnKey === colKey}
+                                    filterDropdownRef={filterDropdownRef}
+                                    filters={col.filters}
+                                    tempSelectedFilters={tempSelectedFilters}
+                                    setTempSelectedFilters={setTempSelectedFilters}
+                                    onApply={(selected) => handleApplyFilters(colKey, selected)}
+                                  />
                                 </div>
                               )}
                             </div>
                           );
 
+                          const padLeft = (idx === 0 && rowSelection) ? '4px' : undefined;
+
                           return (
                             <th
                               key={colKey}
                               style={{
+                                width: col.width,
+                                minWidth: col.width,
                                 textAlign: 'left',
                                 background: 'var(--color-bg-sub, #f5f5f5)',
-                                borderBottom: '1px solid var(--antd-border)',
+                                borderBottom: '1px solid var(--antd-border, #E0E0E0)',
                                 padding: size === 'small' ? '4px 8px' : size === 'middle' ? '12px 12px' : '16px 16px',
+                                paddingLeft: padLeft || (size === 'small' ? 8 : 12),
+                                whiteSpace: 'nowrap',
                               }}
                             >
                               {headerContent}
@@ -1907,19 +2425,18 @@ export function Table<T = any>({
                         const key = getRowKey(record, absIdx);
                         const isSelected = rowSelection && (rowSelection.selectedRowKeys || []).includes(key);
                         const rowProps = onRow ? onRow(record, absIdx) : {};
-
                         const customRowClass = rowClassName ? rowClassName(record, absIdx) : '';
+                        const cellBorderBottom = recordIdx === pageData.length - 1 ? 'none' : '1px solid var(--antd-border, #E0E0E0)';
 
                         return (
                           <tr
                             key={key}
                             data-row-key={key}
                             className={`ant-table-row ${isSelected ? 'ant-table-row-selected' : ''} ${customRowClass}`}
-                            style={{ borderBottom: '1px solid var(--antd-border)' }}
                             {...rowProps}
                           >
                             {rowSelection && (
-                              <td className="ant-table-selection-column" style={{ padding: 8, textAlign: 'center' }}>
+                              <td className="ant-table-selection-column" style={{ width: rowSelection.columnWidth || 28, minWidth: rowSelection.columnWidth || 28, padding: '8px 2px 8px 8px', textAlign: 'center', borderBottom: cellBorderBottom }}>
                                 <Checkbox
                                   checked={isSelected}
                                   onChange={(e) => handleSelectOne(record, absIdx, e.target.checked)}
@@ -1928,11 +2445,17 @@ export function Table<T = any>({
                             )}
                             {columns.map((col: any, colIdx: number) => {
                               const text = col.dataIndex ? record[col.dataIndex] : undefined;
+                              const padLeft = (colIdx === 0 && rowSelection) ? '4px' : undefined;
                               return (
                                 <td
                                   key={col.key || col.dataIndex || colIdx}
                                   style={{
+                                    width: col.width,
+                                    minWidth: col.width,
                                     padding: size === 'small' ? '4px 8px' : size === 'middle' ? '12px 12px' : '16px 16px',
+                                    paddingLeft: padLeft || (size === 'small' ? 8 : 12),
+                                    borderBottom: cellBorderBottom,
+                                    whiteSpace: 'nowrap',
                                   }}
                                 >
                                   {col.render ? col.render(text, record, absIdx) : text}
@@ -1943,8 +2466,8 @@ export function Table<T = any>({
                         );
                       })}
                       {pageData.length === 0 && (
-                        <tr className="ant-table-placeholder">
-                          <td colSpan={columns.length + (rowSelection ? 1 : 0)} style={{ textAlign: 'center', padding: 24 }}>
+                        <tr className="ant-table-placeholder" style={{ background: 'transparent' }}>
+                          <td colSpan={columns.length + (rowSelection ? 1 : 0)} style={{ textAlign: 'center', padding: 24, borderBottom: 'none', background: 'transparent' }}>
                             <Empty />
                           </td>
                         </tr>
@@ -1979,51 +2502,156 @@ export function Table<T = any>({
 // ==========================================
 // 28. Modal
 // ==========================================
-export const Modal: React.FC<any> = ({
+type ModalComponent = React.FC<any> & {
+  confirm: (config: any) => void;
+  success: (config: any) => void;
+  info: (config: any) => void;
+  error: (config: any) => void;
+  warning: (config: any) => void;
+};
+
+export const Modal: ModalComponent = ({
   title,
   open,
   visible,
   onOk,
   onCancel,
   confirmLoading,
+  loading,
+  maskClosable = false,
   okText = 'OK',
-  cancelText = 'Cancel',
+  cancelText = 'Hủy',
   width = 520,
   children,
   footer,
   closable = true,
   closeIcon,
   bodyStyle,
+  style,
+  styles,
+  centered,
+  className = '',
 }) => {
   const isOpen = open !== undefined ? open : visible;
-  if (!isOpen) return null;
+  const [internalLoading, setInternalLoading] = useState(false);
+  const isBusy = Boolean(confirmLoading || loading || internalLoading);
+  const { shouldRender, animClass, overlayRef } = useOverlayAnimation(!!isOpen, 220);
 
-  return (
-    <div className="ant-modal-root" style={{ position: 'fixed', inset: 0, zIndex: 1000 }}>
+  // 100% dialogs must strictly be closed by clicking the 'X' button or explicit action buttons.
+  // Escape key and backdrop clicks are disabled.
+
+  if (!shouldRender) return null;
+
+  const topOffset = style?.top !== undefined ? style.top : undefined;
+  const isCentered = centered !== undefined ? centered : (topOffset === undefined);
+  const hasExistingDialog = typeof document !== 'undefined' && Boolean(
+    document.querySelectorAll('.ant-modal-root').length > 1,
+  );
+
+  const handleOkClick = async (e: any) => {
+    if (isBusy) return;
+    if (onOk) {
+      setInternalLoading(true);
+      try {
+        const res = onOk(e);
+        if (res instanceof Promise) {
+          await res;
+        }
+      } finally {
+        setInternalLoading(false);
+      }
+    }
+  };
+
+  return createPortal(
+    <div
+      className="ant-modal-root"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 10000,
+        pointerEvents: isBusy ? 'all' : 'auto',
+      }}
+    >
       <div
-        className="ant-modal-mask"
-        onClick={onCancel}
-        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000 }}
+        className={`ant-modal-mask ${animClass === 'enter' ? 'k-mask-enter' : 'k-mask-exit'}`}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: hasExistingDialog ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.5)',
+          zIndex: 10000,
+          cursor: isBusy ? 'wait' : 'default',
+        }}
       />
-      <div className="ant-modal-wrap" style={{ position: 'fixed', inset: 0, overflow: 'auto', outline: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div
+        className="ant-modal-wrap"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          overflowY: 'auto',
+          outline: 0,
+          zIndex: 10001,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: '24px 16px',
+          boxSizing: 'border-box',
+        }}
+      >
         <div
-          className="ant-modal"
+          ref={overlayRef}
+          className={`ant-modal ${animClass === 'enter' ? 'k-modal-enter' : 'k-modal-exit'} ${className}`}
           style={{
             width,
+            maxWidth: 'calc(100vw - 24px)',
+            margin: 'auto',
             background: '#fff',
             borderRadius: 8,
-            boxShadow: 'var(--antd-shadow-base)',
+            boxShadow: 'var(--antd-shadow-base, 0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12))',
             position: 'relative',
             display: 'flex',
             flexDirection: 'column',
-            maxHeight: '90vh',
+            maxHeight: 'calc(100vh - 48px)',
+            minWidth: 0,
+            boxSizing: 'border-box',
+            zIndex: 10002,
+            overflow: 'visible',
+            ...style,
+            top: undefined,
           }}
+          onClick={(e) => e.stopPropagation()}
         >
-          {closable !== false && (
+          {/* Busy Loading Overlay (Blocks interaction & shows progress) */}
+          {isBusy && (
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background: 'rgba(255, 255, 255, 0.88)',
+                zIndex: 10020,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 12,
+                borderRadius: 8,
+                backdropFilter: 'blur(3px)',
+                cursor: 'wait',
+                pointerEvents: 'all',
+              }}
+            >
+              <Spin size="large" tip="Đang lưu dữ liệu, vui lòng chờ..." />
+            </div>
+          )}
+
+          {closable !== false && !isBusy && (
             <button
               type="button"
               className="ant-modal-close custom-modal-close"
-              onClick={onCancel}
+              onClick={(e) => {
+                e.stopPropagation();
+                onCancel && onCancel();
+              }}
               aria-label="Close"
               style={{ position: 'absolute', top: -11, right: -11 }}
             >
@@ -2039,32 +2667,114 @@ export const Modal: React.FC<any> = ({
           )}
 
           {title && (
-            <div className="ant-modal-header" style={{ padding: '20px 24px 8px 24px', fontWeight: 600, fontSize: 16 }}>
-              <div className="ant-modal-title" style={{ color: 'var(--antd-text)', fontSize: 16, fontWeight: 600 }}>{title}</div>
+            <div
+              className="ant-modal-header"
+              style={{
+                padding: '8px 8px 0px 8px',
+                fontWeight: 600,
+                fontSize: 15,
+                lineHeight: '22px',
+                borderBottom: 'none',
+                ...(styles?.header || {}),
+              }}
+            >
+              <div className="ant-modal-title" style={{ color: styles?.header?.color || 'var(--antd-text)', fontSize: 15, fontWeight: 600, lineHeight: '22px' }}>{title}</div>
             </div>
           )}
 
-          <div className="ant-modal-body" style={{ padding: '8px 24px 20px 24px', overflowY: 'auto', flex: 1, color: 'var(--antd-text)', fontSize: 14, ...bodyStyle }}>
-            {children}
+          <div
+            className="ant-modal-body"
+            style={{
+              padding: 8,
+              overflowY: bodyStyle?.overflowY !== undefined ? bodyStyle.overflowY : 'auto',
+              overflowX: 'hidden',
+              flex: 1,
+              color: 'var(--antd-text)',
+              fontSize: 14,
+              minWidth: 0,
+              boxSizing: 'border-box',
+              pointerEvents: isBusy ? 'none' : 'auto',
+              ...bodyStyle,
+              ...(styles?.body || {}),
+            }}
+          >
+            <ModalContext.Provider value={{ setModalLoading: setInternalLoading, isModalLoading: isBusy }}>
+              {children}
+            </ModalContext.Provider>
           </div>
 
           {footer !== null && (
-            <div className="ant-modal-footer" style={{ padding: '12px 24px 20px 24px', textAlign: 'right', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <div
+              className="ant-modal-footer"
+              style={{
+                padding: '0px 8px 8px 8px',
+                textAlign: 'right',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                flexWrap: 'wrap',
+                gap: 8,
+                borderTop: 'none',
+                ...(styles?.footer || {}),
+              }}
+            >
               {footer !== undefined ? (
                 footer
               ) : (
                 <>
-                  <Button onClick={onCancel}>{cancelText}</Button>
-                  <Button type="primary" loading={confirmLoading} onClick={onOk}>{okText}</Button>
+                  <Button disabled={isBusy} onClick={onCancel}>{cancelText}</Button>
+                  <Button type="primary" loading={isBusy} disabled={isBusy} onClick={handleOkClick}>{okText}</Button>
                 </>
               )}
             </div>
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
+
+Modal.confirm = (config: any) => {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+
+  const ConfirmModalWrapper = () => {
+    const [open, setOpen] = useState(true);
+
+    const handleClose = (isOk: boolean) => {
+      setOpen(false);
+      setTimeout(() => {
+        if (isOk && config.onOk) config.onOk();
+        if (!isOk && config.onCancel) config.onCancel();
+        if (container.parentNode) {
+          container.parentNode.removeChild(container);
+        }
+      }, 200);
+    };
+
+    return (
+      <Modal
+        open={open}
+        title={config.title}
+        onOk={() => handleClose(true)}
+        onCancel={() => handleClose(false)}
+        okText={config.okText || 'OK'}
+        cancelText={config.cancelText || 'Cancel'}
+        width={config.width || 420}
+      >
+        {config.content}
+      </Modal>
+    );
+  };
+
+  const root = createRoot(container);
+  root.render(<ConfirmModalWrapper />);
+};
+
+Modal.success = (config: any) => Modal.confirm({ ...config, okText: config.okText || 'Đồng ý', cancelText: null });
+Modal.info = (config: any) => Modal.confirm({ ...config, okText: config.okText || 'Đồng ý', cancelText: null });
+Modal.error = (config: any) => Modal.confirm({ ...config, okText: config.okText || 'Đóng', cancelText: null });
+Modal.warning = (config: any) => Modal.confirm({ ...config, okText: config.okText || 'Đồng ý', cancelText: null });
 
 // ==========================================
 // 29. Tooltip
@@ -2073,6 +2783,8 @@ export const Tooltip: React.FC<any> = ({ title, children, placement = 'top', ove
   const [visible, setVisible] = useState(false);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
   const triggerRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const { shouldRender, animClass } = useOverlayAnimation(visible, 100);
 
   const updateCoords = () => {
     if (triggerRef.current) {
@@ -2095,6 +2807,14 @@ export const Tooltip: React.FC<any> = ({ title, children, placement = 'top', ove
         left = rect.right + scrollX;
       }
 
+      // Clamp left coordinate so it never overflows offscreen left or right
+      const tooltipWidth = tooltipRef.current ? tooltipRef.current.offsetWidth : 100;
+      const minLeft = scrollX + tooltipWidth / 2 + 10;
+      const maxLeft = scrollX + window.innerWidth - tooltipWidth / 2 - 10;
+      if (placement === 'top' || placement === 'bottom') {
+        left = Math.max(minLeft, Math.min(maxLeft, left));
+      }
+
       setCoords({ top, left });
     }
   };
@@ -2102,18 +2822,21 @@ export const Tooltip: React.FC<any> = ({ title, children, placement = 'top', ove
   useEffect(() => {
     if (visible) {
       updateCoords();
+      const timer = setTimeout(updateCoords, 0);
       window.addEventListener('scroll', updateCoords, true);
       window.addEventListener('resize', updateCoords);
       return () => {
+        clearTimeout(timer);
         window.removeEventListener('scroll', updateCoords, true);
         window.removeEventListener('resize', updateCoords);
       };
     }
   }, [visible, placement]);
 
-  const tooltipElement = visible && title && createPortal(
+  const tooltipElement = shouldRender && title && createPortal(
     <div
-      className="ant-tooltip"
+      ref={tooltipRef}
+      className={`ant-tooltip ${animClass === 'enter' ? 'k-tooltip-enter' : 'k-tooltip-exit'}`}
       style={{
         position: 'absolute',
         top: coords.top,
@@ -2129,13 +2852,16 @@ export const Tooltip: React.FC<any> = ({ title, children, placement = 'top', ove
         marginLeft: placement === 'left' ? -8 : placement === 'right' ? 8 : 0,
         background: 'rgba(0,0,0,0.85)',
         color: '#fff',
-        padding: '6px 10px',
+        padding: '5px 9px',
         borderRadius: 4,
         fontSize: 12,
         whiteSpace: 'nowrap',
         zIndex: 2000,
         boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
         pointerEvents: 'none',
+        maxWidth: 'calc(100vw - 20px)',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
         ...overlayStyle
       }}
     >
@@ -2150,6 +2876,7 @@ export const Tooltip: React.FC<any> = ({ title, children, placement = 'top', ove
       style={{ position: 'relative', display: 'inline-block', ...style }}
       onMouseEnter={() => setVisible(true)}
       onMouseLeave={() => setVisible(false)}
+      onClick={() => setVisible(false)}
     >
       {children}
       {tooltipElement}
@@ -2160,31 +2887,49 @@ export const Tooltip: React.FC<any> = ({ title, children, placement = 'top', ove
 // ==========================================
 // 30. Drawer
 // ==========================================
-export const Drawer: React.FC<any> = ({ title, open, onClose, width = 378, children, footer }) => {
-  if (!open) return null;
+export const Drawer: React.FC<any> = ({ title, open, onClose, width = 378, children, footer, mask = false }) => {
+  const { shouldRender, animClass, overlayRef } = useOverlayAnimation(!!open, 220);
+
+  // 100% dialogs/drawers must strictly be closed by clicking the 'X' button or explicit action buttons.
+
+  if (!shouldRender) return null;
+
   return (
-    <div className="ant-drawer-root" style={{ position: 'fixed', inset: 0, zIndex: 1000 }}>
+    <div className="ant-drawer-root" style={{ position: 'fixed', inset: 0, zIndex: 10000, pointerEvents: 'none' }}>
+      {mask && (
+        <div
+          className={`ant-drawer-mask ${animClass === 'enter' ? 'k-mask-enter' : 'k-mask-exit'}`}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.2)',
+            zIndex: 10000,
+            pointerEvents: 'auto',
+          }}
+          onClick={onClose}
+        />
+      )}
       <div
-        className="ant-drawer-mask"
-        onClick={onClose}
-        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000 }}
-      />
-      <div
-        className="ant-drawer-content-wrapper"
+        ref={overlayRef}
+        className={`ant-drawer-content-wrapper ${animClass === 'enter' ? 'k-drawer-enter' : 'k-drawer-exit'}`}
         style={{
           position: 'fixed',
           top: 0,
           right: 0,
           bottom: 0,
           width,
+          maxWidth: '100vw',
           background: '#fff',
-          zIndex: 1000,
-          boxShadow: '-6px 0 16px rgba(0, 0, 0, 0.08)',
+          zIndex: 10001,
+          boxShadow: '-6px 0 24px rgba(0, 0, 0, 0.12)',
           display: 'flex',
           flexDirection: 'column',
+          minWidth: 0,
+          boxSizing: 'border-box',
+          pointerEvents: 'auto',
         }}
       >
-        <div className="ant-drawer-header" style={{ padding: '16px 24px', borderBottom: '1px solid var(--antd-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="ant-drawer-header" style={{ padding: '16px 24px', borderBottom: '1px solid var(--antd-border, #E2E8F0)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div className="ant-drawer-title" style={{ fontWeight: 600, fontSize: 16 }}>{title}</div>
           <button
             type="button"
@@ -2198,11 +2943,11 @@ export const Drawer: React.FC<any> = ({ title, open, onClose, width = 378, child
             </svg>
           </button>
         </div>
-        <div className="ant-drawer-body" style={{ flex: 1, padding: 24, overflowY: 'auto' }}>
+        <div className="ant-drawer-body" style={{ flex: 1, padding: '20px 24px 28px 24px', overflowY: 'auto', overflowX: 'hidden', minWidth: 0 }}>
           {children}
         </div>
         {footer && (
-          <div className="ant-drawer-footer" style={{ padding: '10px 24px', borderTop: '1px solid var(--antd-border)', background: '#fff' }}>
+          <div className="ant-drawer-footer" style={{ padding: '14px 24px 20px 24px', borderTop: '1px solid var(--antd-border, #E2E8F0)', background: '#fff' }}>
             {footer}
           </div>
         )}
@@ -2225,9 +2970,11 @@ export const Popconfirm: React.FC<any> = ({
 }) => {
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const [arrowOffset, setArrowOffset] = useState(0);
   const [placement, setPlacement] = useState<'top' | 'bottom' | 'left' | 'right'>('top');
   const triggerRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const { shouldRender: shouldRenderPopconfirm, animClass: popconfirmAnimClass, overlayRef: popconfirmOverlayRef } = useOverlayAnimation(open, 140);
 
   const updateCoords = () => {
     if (triggerRef.current) {
@@ -2242,28 +2989,28 @@ export const Popconfirm: React.FC<any> = ({
       
       let computedPlacement: 'top' | 'bottom' | 'left' | 'right' = 'top';
       
-      if (spaceTop < 120) {
-        if (spaceBottom >= 120) {
+      if (spaceTop < 140) {
+        if (spaceBottom >= 140) {
           computedPlacement = 'bottom';
-        } else if (spaceLeft >= 260) {
+        } else if (spaceLeft >= 280) {
           computedPlacement = 'left';
-        } else if (spaceRight >= 260) {
+        } else if (spaceRight >= 280) {
           computedPlacement = 'right';
         } else {
           computedPlacement = 'bottom';
         }
-      } else if (spaceRight < 140) {
-        if (spaceLeft >= 260) {
+      } else if (spaceRight < 160) {
+        if (spaceLeft >= 280) {
           computedPlacement = 'left';
-        } else if (spaceBottom >= 120) {
+        } else if (spaceBottom >= 140) {
           computedPlacement = 'bottom';
         } else {
           computedPlacement = 'top';
         }
-      } else if (spaceLeft < 140) {
-        if (spaceRight >= 260) {
+      } else if (spaceLeft < 160) {
+        if (spaceRight >= 280) {
           computedPlacement = 'right';
-        } else if (spaceBottom >= 120) {
+        } else if (spaceBottom >= 140) {
           computedPlacement = 'bottom';
         } else {
           computedPlacement = 'top';
@@ -2272,33 +3019,50 @@ export const Popconfirm: React.FC<any> = ({
       
       setPlacement(computedPlacement);
 
+      const popWidth = 270;
+      const popHeight = popoverRef.current ? popoverRef.current.offsetHeight : 120;
+
       let top = rect.top + scrollY;
       let left = rect.left + scrollX;
+      let calculatedArrowOffset = 0;
 
-      if (computedPlacement === 'top') {
-        top = rect.top + scrollY;
-        left = rect.left + scrollX + rect.width / 2;
-      } else if (computedPlacement === 'bottom') {
-        top = rect.bottom + scrollY;
-        left = rect.left + scrollX + rect.width / 2;
-      } else if (computedPlacement === 'left') {
-        top = rect.top + scrollY + rect.height / 2;
-        left = rect.left + scrollX;
-      } else if (computedPlacement === 'right') {
-        top = rect.top + scrollY + rect.height / 2;
-        left = rect.right + scrollX;
+      if (computedPlacement === 'top' || computedPlacement === 'bottom') {
+        const rawLeft = rect.left + rect.width / 2;
+        const clampedLeft = Math.max(popWidth / 2 + 16, Math.min(window.innerWidth - popWidth / 2 - 16, rawLeft));
+        left = clampedLeft + scrollX;
+        calculatedArrowOffset = rawLeft - clampedLeft;
+
+        if (computedPlacement === 'top') {
+          top = rect.top + scrollY;
+        } else {
+          top = rect.bottom + scrollY;
+        }
+      } else if (computedPlacement === 'left' || computedPlacement === 'right') {
+        const rawTop = rect.top + rect.height / 2;
+        const clampedTop = Math.max(popHeight / 2 + 16, Math.min(window.innerHeight - popHeight / 2 - 16, rawTop));
+        top = clampedTop + scrollY;
+        calculatedArrowOffset = rawTop - clampedTop;
+
+        if (computedPlacement === 'left') {
+          left = rect.left + scrollX;
+        } else {
+          left = rect.right + scrollX;
+        }
       }
 
       setCoords({ top, left });
+      setArrowOffset(calculatedArrowOffset);
     }
   };
 
   useEffect(() => {
     if (open) {
       updateCoords();
+      const timer = setTimeout(updateCoords, 10);
       window.addEventListener('scroll', updateCoords, true);
       window.addEventListener('resize', updateCoords);
       return () => {
+        clearTimeout(timer);
         window.removeEventListener('scroll', updateCoords, true);
         window.removeEventListener('resize', updateCoords);
       };
@@ -2318,10 +3082,13 @@ export const Popconfirm: React.FC<any> = ({
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
-  const popoverElement = open && createPortal(
+  const popoverElement = shouldRenderPopconfirm && createPortal(
     <div
-      ref={popoverRef}
-      className="ant-popover"
+      ref={(node) => {
+        popoverRef.current = node;
+        popconfirmOverlayRef.current = node;
+      }}
+      className={`ant-popover ${popconfirmAnimClass === 'enter' ? 'k-pop-enter' : 'k-pop-exit'}`}
       style={{
         position: 'absolute',
         top: coords.top,
@@ -2352,7 +3119,7 @@ export const Popconfirm: React.FC<any> = ({
       >
         <div className="ant-popover-inner-content">
           <div style={{ display: 'flex', gap: 8, alignItems: 'start', fontSize: 14 }}>
-            <span style={{ color: 'var(--antd-warning)', fontWeight: 'bold' }}>⚠</span>
+            <WarningFilled style={{ color: 'var(--antd-warning)', fontSize: 16, marginTop: 2, flexShrink: 0 }} />
             <div style={{ color: 'var(--antd-text)', wordBreak: 'break-word', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: '1.4' }}>{title}</div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
@@ -2369,35 +3136,35 @@ export const Popconfirm: React.FC<any> = ({
       <div
         style={{
           position: 'absolute',
-          width: 10,
-          height: 10,
+          width: 8,
+          height: 8,
           background: '#ffffff',
           transform: 'rotate(45deg)',
           zIndex: 3,
           boxSizing: 'border-box',
           ...(
             placement === 'top' ? {
-              bottom: -5,
-              left: '50%',
-              marginLeft: -5,
+              bottom: -4,
+              left: `calc(50% + ${arrowOffset}px)`,
+              marginLeft: -4,
               borderRight: '1px solid var(--antd-border)',
               borderBottom: '1px solid var(--antd-border)',
             } : placement === 'bottom' ? {
-              top: -5,
-              left: '50%',
-              marginLeft: -5,
+              top: -4,
+              left: `calc(50% + ${arrowOffset}px)`,
+              marginLeft: -4,
               borderLeft: '1px solid var(--antd-border)',
               borderTop: '1px solid var(--antd-border)',
             } : placement === 'left' ? {
-              right: -5,
-              top: '50%',
-              marginTop: -5,
-              borderTop: '1px solid var(--antd-border)',
+              right: -4,
+              top: `calc(50% + ${arrowOffset}px)`,
+              marginTop: -4,
               borderRight: '1px solid var(--antd-border)',
+              borderTop: '1px solid var(--antd-border)',
             } : { // right
-              left: -5,
-              top: '50%',
-              marginTop: -5,
+              left: -4,
+              top: `calc(50% + ${arrowOffset}px)`,
+              marginTop: -4,
               borderLeft: '1px solid var(--antd-border)',
               borderBottom: '1px solid var(--antd-border)',
             }
@@ -2437,9 +3204,15 @@ export const Skeleton: React.FC<any> = ({ active, children, loading = true }) =>
 };
 
 // ==========================================
-// 33. List & List.Item & Meta
-// ==========================================
-export const List: React.FC<any> & { Item: React.FC<any> } = ({ dataSource = [], renderItem, header, footer, style }) => {
+export interface ListItemComponent extends React.FC<any> {
+  Meta: React.FC<any>;
+}
+
+export interface ListComponent extends React.FC<any> {
+  Item: ListItemComponent;
+}
+
+const ListBase: React.FC<any> = ({ dataSource = [], renderItem, header, footer, style }) => {
   return (
     <div className="ant-list" style={style}>
       {header && <div className="ant-list-header" style={{ padding: '12px 24px', borderBottom: '1px solid var(--antd-border)' }}>{header}</div>}
@@ -2451,7 +3224,7 @@ export const List: React.FC<any> & { Item: React.FC<any> } = ({ dataSource = [],
   );
 };
 
-List.Item = ({ children, actions, style }) => {
+const ListItemBase: React.FC<any> = ({ children, actions, style }) => {
   return (
     <div className="ant-list-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', borderBottom: '1px solid var(--antd-border)', ...style }}>
       <div className="ant-list-item-content" style={{ flex: 1 }}>{children}</div>
@@ -2477,7 +3250,9 @@ const ListItemMeta: React.FC<any> = ({ avatar, title, description }) => {
     </div>
   );
 };
-(List.Item as any).Meta = ListItemMeta;
+
+const ListItem: ListItemComponent = Object.assign(ListItemBase, { Meta: ListItemMeta });
+export const List: ListComponent = Object.assign(ListBase, { Item: ListItem });
 
 // ==========================================
 // 34. Breadcrumb
@@ -2598,7 +3373,7 @@ export const Tree: React.FC<any> = ({
 // ==========================================
 // 36. Segmented
 // ==========================================
-export const Segmented: React.FC<any> = ({ options = [], value, onChange }) => {
+export const Segmented: React.FC<any> = ({ options = [], value, onChange, style }) => {
   const [localVal, setLocalVal] = useState(options[0]);
   const currentVal = value !== undefined ? value : localVal;
 
@@ -2608,7 +3383,22 @@ export const Segmented: React.FC<any> = ({ options = [], value, onChange }) => {
   };
 
   return (
-    <div className="ant-segmented" style={{ display: 'inline-flex', padding: 2, background: 'rgba(0,0,0,0.05)', borderRadius: 6, gap: 2 }}>
+    <div
+      className="ant-segmented"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        height: 28,
+        padding: 2,
+        background: 'rgba(0, 0, 0, 0.06)',
+        borderRadius: 6,
+        gap: 2,
+        boxSizing: 'border-box',
+        flexShrink: 0,
+        userSelect: 'none',
+        ...style,
+      }}
+    >
       {options.map((opt: any) => {
         const val = typeof opt === 'object' ? opt.value : opt;
         const label = typeof opt === 'object' ? opt.label : opt;
@@ -2616,16 +3406,28 @@ export const Segmented: React.FC<any> = ({ options = [], value, onChange }) => {
         return (
           <div
             key={String(val)}
-            onClick={() => handleSelect(val)}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSelect(val);
+            }}
             style={{
-              padding: '4px 12px',
+              height: 24,
+              padding: '0 10px',
               borderRadius: 4,
               cursor: 'pointer',
-              background: isSelected ? '#fff' : 'transparent',
-              boxShadow: isSelected ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-              fontWeight: isSelected ? 500 : 'normal',
-              fontSize: 13,
-              transition: 'all 0.15s',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 5,
+              background: isSelected ? '#FFFFFF' : 'transparent',
+              boxShadow: isSelected ? '0 1px 3px rgba(0, 0, 0, 0.12)' : 'none',
+              fontWeight: isSelected ? 500 : 400,
+              fontSize: 12.5,
+              color: isSelected ? '#1E293B' : '#64748B',
+              boxSizing: 'border-box',
+              flexShrink: 0,
+              userSelect: 'none',
+              transition: 'background-color 0.12s ease, box-shadow 0.12s ease, color 0.12s ease',
             }}
           >
             {label}
@@ -2639,44 +3441,104 @@ export const Segmented: React.FC<any> = ({ options = [], value, onChange }) => {
 // ==========================================
 // 37. AutoComplete
 // ==========================================
-export const AutoComplete: React.FC<any> = ({ options = [], value, onChange, placeholder, style }) => {
+export const AutoComplete: React.FC<any> = ({
+  options = [],
+  value,
+  onChange,
+  onSelect,
+  onBlur,
+  placeholder,
+  style,
+  children,
+  bordered,
+  ...props
+}) => {
   const [open, setOpen] = useState(false);
   const [filtered, setFiltered] = useState(options);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (value) {
+      const valStr = String(value).toLowerCase();
+      const matched = options.filter((opt: any) => {
+        const str = String(typeof opt === 'object' && opt.value !== undefined ? opt.value : opt).toLowerCase();
+        return str.includes(valStr);
+      });
+      setFiltered(matched.length > 0 ? matched : options);
+    } else {
+      setFiltered(options);
+    }
+  }, [options, value]);
+
+  const { shouldRender: shouldRenderAuto, animClass: autoAnimClass, overlayRef: autoOverlayRef } = useOverlayAnimation(open && filtered.length > 0, 130);
+
+  useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false);
+        onBlur && onBlur(e);
       }
     };
     document.addEventListener('mousedown', handleOutsideClick);
     return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, []);
+  }, [onBlur]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     onChange && onChange(val);
-    const matched = options.filter((opt: any) => String(opt.value).toLowerCase().includes(val.toLowerCase()));
-    setFiltered(matched);
+    const matched = options.filter((opt: any) => {
+      const str = String(typeof opt === 'object' && opt.value !== undefined ? opt.value : opt).toLowerCase();
+      return str.includes(val.toLowerCase());
+    });
+    setFiltered(matched.length > 0 ? matched : options);
     setOpen(true);
   };
 
+  const handleOptionSelect = (optVal: any) => {
+    if (onSelect) onSelect(optVal);
+    if (onChange) onChange(optVal);
+    setOpen(false);
+  };
+
   return (
-    <div ref={containerRef} style={{ position: 'relative', width: '100%', ...style }}>
-      <Input
-        value={value}
-        onChange={handleInputChange}
-        onFocus={() => setOpen(true)}
-        placeholder={placeholder}
-      />
-      {open && filtered.length > 0 && (
+    <div ref={containerRef} style={{ position: 'relative', width: '100%', display: 'flex', alignItems: 'center', height: '100%', ...style }}>
+      {children ? (
+        React.isValidElement(children) ? (
+          React.cloneElement(children as React.ReactElement<any>, {
+            value: value !== undefined ? value : (children as React.ReactElement<any>).props.value,
+            onChange: (e: any) => {
+              handleInputChange(e);
+              (children as React.ReactElement<any>).props.onChange && (children as React.ReactElement<any>).props.onChange(e);
+            },
+            onFocus: (e: any) => {
+              setOpen(true);
+              (children as React.ReactElement<any>).props.onFocus && (children as React.ReactElement<any>).props.onFocus(e);
+            },
+          })
+        ) : (
+          children
+        )
+      ) : (
+        <Input
+          value={value}
+          onChange={handleInputChange}
+          onFocus={() => setOpen(true)}
+          placeholder={placeholder}
+          bordered={bordered}
+          style={bordered === false ? { border: 'none', background: 'transparent', boxShadow: 'none', padding: 0 } : undefined}
+          {...props}
+        />
+      )}
+      {shouldRenderAuto && (
         <div
+          ref={autoOverlayRef}
+          className={`${autoAnimClass === 'enter' ? 'k-select-enter' : 'k-select-exit'}`}
           style={{
             position: 'absolute',
             top: '100%',
             left: 0,
             right: 0,
+            marginTop: 4,
             background: '#fff',
             border: '1px solid var(--antd-border)',
             borderRadius: 4,
@@ -2684,22 +3546,41 @@ export const AutoComplete: React.FC<any> = ({ options = [], value, onChange, pla
             zIndex: 1000,
             maxHeight: 200,
             overflowY: 'auto',
+            transformOrigin: 'top center',
           }}
         >
-          {filtered.map((opt: any) => (
-            <div
-              key={opt.value}
-              onClick={() => {
-                onChange && onChange(opt.value);
-                setOpen(false);
-              }}
-              style={{ padding: '8px 12px', cursor: 'pointer' }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = '#f5f5f5')}
-              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-            >
-              {opt.value}
-            </div>
-          ))}
+          {filtered.map((opt: any) => {
+            const optVal = typeof opt === 'object' && opt.value !== undefined ? opt.value : opt;
+            const optLabel = typeof opt === 'object' && opt.label !== undefined ? opt.label : optVal;
+            return (
+              <div
+                key={String(optVal)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleOptionSelect(optVal);
+                }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleOptionSelect(optVal);
+                }}
+                style={{
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  color: '#212121',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = '#f5f5f5')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+              >
+                <span>{optLabel}</span>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -2730,11 +3611,12 @@ export const Timeline: React.FC<any> = ({ items = [] }) => {
 // ==========================================
 // 39. Tabs
 // ==========================================
-export const Tabs: React.FC<any> = ({ items = [], activeKey, onChange, tabPosition = 'top', style }) => {
+export const Tabs: React.FC<any> = ({ items = [], activeKey, onChange, tabPosition = 'top', style, hideHeader }) => {
   const [localActiveKey, setLocalActiveKey] = useState(items[0]?.key);
   const currentKey = activeKey !== undefined ? activeKey : localActiveKey;
   const listRef = useRef<HTMLDivElement>(null);
-  const [inkStyle, setInkStyle] = useState<React.CSSProperties>({});
+  const [inkStyle, setInkStyle] = useState<React.CSSProperties>({ opacity: 0 });
+  const isFirstRender = useRef(true);
 
   const handleTabClick = (key: string) => {
     if (onChange) onChange(key);
@@ -2754,6 +3636,8 @@ export const Tabs: React.FC<any> = ({ items = [], activeKey, onChange, tabPositi
             height: activeEl.offsetHeight,
             right: 0,
             width: 2,
+            opacity: 1,
+            transition: isFirstRender.current ? 'opacity 0.15s ease' : 'all 0.3s cubic-bezier(0.645, 0.045, 0.355, 1)',
           });
         } else {
           setInkStyle({
@@ -2762,7 +3646,14 @@ export const Tabs: React.FC<any> = ({ items = [], activeKey, onChange, tabPositi
             width: activeEl.offsetWidth,
             bottom: 0,
             height: 2,
+            opacity: 1,
+            transition: isFirstRender.current ? 'opacity 0.15s ease' : 'all 0.3s cubic-bezier(0.645, 0.045, 0.355, 1)',
           });
+        }
+        if (isFirstRender.current) {
+          setTimeout(() => {
+            isFirstRender.current = false;
+          }, 50);
         }
       }
     };
@@ -2778,54 +3669,66 @@ export const Tabs: React.FC<any> = ({ items = [], activeKey, onChange, tabPositi
   }, [currentKey, isLeft, items]);
 
   return (
-    <div className={`ant-tabs ant-tabs-${tabPosition}`} style={{ display: isLeft ? 'flex' : 'block', ...style }}>
-      <div
-        className="ant-tabs-nav"
-        style={{
-          display: 'flex',
-          flexDirection: isLeft ? 'column' : 'row',
-          borderBottom: 'none',
-          borderRight: 'none',
-          paddingBottom: isLeft ? 0 : 8,
-          paddingRight: isLeft ? 12 : 0,
-          marginRight: isLeft ? 16 : 0,
-        }}
-      >
-        <div className="ant-tabs-nav-wrap">
-          <div
-            ref={listRef}
-            className="ant-tabs-nav-list"
-            style={{
-              display: 'flex',
-              gap: 8,
-              flexDirection: isLeft ? 'column' : 'row',
-              position: 'relative',
-            }}
-          >
-            {items.map((tab: any) => {
-              if (!tab) return null;
-              const isActive = tab.key === currentKey;
-              return (
-                <div
-                  key={tab.key}
-                  onClick={() => !tab.disabled && handleTabClick(tab.key)}
-                  className={`ant-tabs-tab ${isActive ? 'ant-tabs-tab-active' : ''} ${tab.disabled ? 'ant-tabs-tab-disabled' : ''}`}
-                >
-                  <button type="button" disabled={tab.disabled} role="tab" className="ant-tabs-tab-btn" style={{ background: 'transparent', border: 'none', cursor: tab.disabled ? 'not-allowed' : 'pointer', outline: 'none' }}>
-                    {tab.label}
-                  </button>
-                </div>
-              );
-            })}
-            <div className="ant-tabs-ink-bar" style={inkStyle} />
+    <div
+      className={`ant-tabs ant-tabs-${tabPosition}`}
+      style={{
+        display: isLeft ? 'flex' : hideHeader ? 'flex' : 'block',
+        flexDirection: hideHeader ? 'column' : isLeft ? 'row' : undefined,
+        height: hideHeader ? '100%' : undefined,
+        ...style
+      }}
+    >
+      {!hideHeader && (
+        <div
+          className="ant-tabs-nav"
+          style={{
+            display: 'flex',
+            flexDirection: isLeft ? 'column' : 'row',
+            borderBottom: 'none',
+            borderRight: 'none',
+            paddingBottom: 0,
+            paddingRight: isLeft ? 12 : 0,
+            marginRight: isLeft ? 16 : 0,
+          }}
+        >
+          <div className="ant-tabs-nav-wrap">
+            <div
+              ref={listRef}
+              className="ant-tabs-nav-list"
+              style={{
+                display: 'flex',
+                gap: 8,
+                flexDirection: isLeft ? 'column' : 'row',
+                position: 'relative',
+              }}
+            >
+              {items.map((tab: any) => {
+                if (!tab) return null;
+                const isActive = tab.key === currentKey;
+                return (
+                  <div
+                    key={tab.key}
+                    onClick={() => !tab.disabled && handleTabClick(tab.key)}
+                    className={`ant-tabs-tab ${isActive ? 'ant-tabs-tab-active' : ''} ${tab.disabled ? 'ant-tabs-tab-disabled' : ''}`}
+                  >
+                    <button type="button" disabled={tab.disabled} role="tab" className="ant-tabs-tab-btn" style={{ background: 'transparent', border: 'none', cursor: tab.disabled ? 'not-allowed' : 'pointer', outline: 'none' }}>
+                      {tab.label}
+                    </button>
+                  </div>
+                );
+              })}
+              <div className="ant-tabs-ink-bar" style={inkStyle} />
+            </div>
           </div>
         </div>
-      </div>
-      <div className="ant-tabs-content-holder">
-        <div className="ant-tabs-content" style={{ flex: 1, padding: '6px 0' }}>
-          {items.find((tab: any) => tab && tab.key === currentKey)?.children}
+      )}
+      {Boolean(items.find((tab: any) => tab && tab.key === currentKey)?.children) && (
+        <div className="ant-tabs-content-holder" style={hideHeader ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } : undefined}>
+          <div className="ant-tabs-content" style={{ flex: 1, minHeight: 0, padding: hideHeader ? 0 : '6px 0', ...(hideHeader ? { display: 'flex', flexDirection: 'column', height: '100%' } : {}) }}>
+            {items.find((tab: any) => tab && tab.key === currentKey)?.children}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
@@ -2833,28 +3736,1014 @@ export const Tabs: React.FC<any> = ({ items = [], activeKey, onChange, tabPositi
 // ==========================================
 // 40. Upload
 // ==========================================
-export const Upload: React.FC<any> = ({ children, customRequest, onChange, beforeUpload, maxCount }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+export type FileUploadDialogProps = {
+  open: boolean;
+  onClose: () => void;
+  onSelect: (files: File[]) => void | Promise<void>;
+  title?: string;
+  accept?: string;
+  multiple?: boolean;
+  confirmText?: string;
+};
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+interface FileExplorerItem {
+  key: string;
+  name: string;
+  type: 'dir' | 'file';
+  size: string;
+  modified: string;
+  owner?: string;
+  group?: string;
+  permission?: string;
+  mime?: string;
+  nativeFile?: File;
+}
+
+const DEFAULT_FS_EXPLORER: Record<string, FileExplorerItem[]> = {
+  '/': [],
+};
+
+export const FileUploadDialog: React.FC<FileUploadDialogProps> = ({
+  open,
+  onClose,
+  onSelect,
+  title = 'Chọn tệp để tải lên',
+  accept,
+  multiple = true,
+  confirmText = 'Chọn tệp',
+}) => {
+  const localInputRef = useRef<HTMLInputElement>(null);
+  const [path, setPath] = useState<string[]>(['/']);
+  const [pathIds, setPathIds] = useState<Array<string | null>>([null]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [selectedItems, setSelectedItems] = useState<FileExplorerItem[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [fs, setFs] = useState<Record<string, FileExplorerItem[]>>(DEFAULT_FS_EXPLORER);
+  const [isVirtualEmployeeRoot, setIsVirtualEmployeeRoot] = useState(false);
+  const [virtualRootLabel, setVirtualRootLabel] = useState('');
+  const [isEditingPath, setIsEditingPath] = useState(false);
+  const [pathInput, setPathInput] = useState('');
+
+  const currentPathStr = path.length === 1 ? '/' : '/' + path.slice(1).join('/');
+  const currentDisplayPath = currentPathStr;
+  const currentDirectoryId = pathIds[pathIds.length - 1] || null;
+
+  const loadDirectory = React.useCallback(async (directoryId: string | null, pathKey: string) => {
+    try {
+      const res = await filesApi.list(directoryId, false);
+      const payload = res.data;
+      const listed: FileExplorerItem[] = (payload?.data || []).map((node: any) => ({
+        key: node.id,
+        name: node.name,
+        type: node.type,
+        size: node.type === 'dir' ? '—' : formatFileSize(node.sizeBytes),
+        modified: node.modified,
+        owner: node.owner,
+        group: node.group,
+        permission: node.permission,
+        mime: node.mime,
+      }));
+      setFs(prev => ({ ...prev, [pathKey]: listed }));
+      if (!directoryId && payload?.context) {
+        setIsVirtualEmployeeRoot(payload.context.isVirtualEmployeeRoot);
+        setVirtualRootLabel(payload.context.rootLabel || '');
+        setPathIds(prev => prev.length === 1 && prev[0] === null ? [payload.context.parentId] : prev);
+      }
+    } catch (err) {}
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      setSelectedItems([]);
+      setSearchQuery('');
+      setPath(['/']);
+      setPathIds([null]);
+      void loadDirectory(null, '/');
+    }
+  }, [open, loadDirectory]);
+
+  const currentEntries = fs[currentPathStr] || [];
+
+  const filteredEntries = React.useMemo(() => {
+    let list = currentEntries;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(item => (item.name || '').toLowerCase().includes(q));
+    }
+    if (accept && accept.trim() && accept !== '*/*') {
+      const exts = accept.split(',').map(e => e.trim().toLowerCase());
+      list = list.filter(item => {
+        if (item.type === 'dir') return true;
+        const name = (item.name || '').toLowerCase();
+        return exts.some(ext => {
+          if (ext.startsWith('.')) return name.endsWith(ext);
+          if (ext.includes('/*')) {
+            const group = ext.replace('/*', '');
+            if (group === 'image') return name.match(/\.(png|jpe?g|gif|webp|svg|bmp|tiff?|avif|heic|heif|ico)$/i);
+            if (group === 'video') return name.match(/\.(mp4|mkv|webm|avi)$/i);
+            if (group === 'audio') return name.match(/\.(mp3|wav|ogg|m4a)$/i);
+          }
+          return false;
+        });
+      });
+    }
+    return list;
+  }, [currentEntries, searchQuery, accept]);
+
+  const handleSelectAll = (checked: boolean) => {
+    const selectable = filteredEntries.filter(i => i.type === 'file');
+    if (!checked) {
+      setSelectedItems(prev => prev.filter(s => !selectable.some(i => i.key === s.key)));
+    } else {
+      setSelectedItems(prev => {
+        const remaining = selectable.filter(i => !prev.some(s => s.key === i.key));
+        return [...prev, ...remaining];
+      });
+    }
+  };
+
+  const handleOpenDir = (dirItem: FileExplorerItem) => {
+    const newPathStr = path.length === 1 ? '/' + dirItem.name : '/' + path.slice(1).join('/') + '/' + dirItem.name;
+    setPath(prev => [...prev, dirItem.name]);
+    setPathIds(prev => [...prev, dirItem.key]);
+    setSearchQuery('');
+    void loadDirectory(dirItem.key, newPathStr);
+  };
+
+  const handleBreadcrumbClick = (i: number) => {
+    const newPath = path.slice(0, i + 1);
+    const newPathIds = pathIds.slice(0, i + 1);
+    setPath(newPath);
+    setPathIds(newPathIds);
+    setSearchQuery('');
+    const targetPathStr = i === 0 ? '/' : '/' + newPath.slice(1).join('/');
+    const targetDirId = newPathIds[newPathIds.length - 1] || null;
+    void loadDirectory(targetDirId, targetPathStr);
+  };
+
+  const handleGoBack = () => {
+    if (path.length > 1) {
+      const newPath = path.slice(0, -1);
+      const newPathIds = pathIds.slice(0, -1);
+      setPath(newPath);
+      setPathIds(newPathIds);
+      setSearchQuery('');
+      const targetPathStr = newPath.length === 1 ? '/' : '/' + newPath.slice(1).join('/');
+      const targetDirId = newPathIds[newPathIds.length - 1] || null;
+      void loadDirectory(targetDirId, targetPathStr);
+    }
+  };
+
+  const handlePathInputSubmit = (inputVal: string) => {
+    setIsEditingPath(false);
+    const trimmed = (inputVal || '').trim();
+    if (!trimmed || trimmed === '/') {
+      setPath(['/']);
+      setPathIds([null]);
+      setSearchQuery('');
+      void loadDirectory(null, '/');
+      return;
+    }
+
+    const parts = trimmed.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean);
+    if (parts.length === 0) {
+      setPath(['/']);
+      setPathIds([null]);
+      setSearchQuery('');
+      void loadDirectory(null, '/');
+      return;
+    }
+
+    let currentKey: string | null = null;
+    const newPath = ['/'];
+    const newPathIds: Array<string | null> = [null];
+
+    for (let idx = 0; idx < parts.length; idx++) {
+      const partName = parts[idx];
+      const checkPathStr = idx === 0 ? '/' : '/' + parts.slice(0, idx).join('/');
+      const dirEntries = fs[checkPathStr] || [];
+      const found = dirEntries.find(d => d.type === 'dir' && (d.name || '').toLowerCase() === (partName || '').toLowerCase());
+      if (found) {
+        newPath.push(found.name);
+        newPathIds.push(found.key);
+        currentKey = found.key;
+      } else {
+        newPath.push(partName);
+        newPathIds.push(null);
+      }
+    }
+
+    setPath(newPath);
+    setPathIds(newPathIds);
+    setSearchQuery('');
+    const finalPathStr = '/' + parts.join('/');
+    void loadDirectory(currentKey, finalPathStr);
+  };
+
+  const handleToggleSelect = (item: FileExplorerItem) => {
+    if (item.type === 'dir') {
+      handleOpenDir(item);
+      return;
+    }
+    if (multiple) {
+      const exists = selectedItems.some(i => i.key === item.key);
+      if (exists) {
+        setSelectedItems(selectedItems.filter(i => i.key !== item.key));
+      } else {
+        setSelectedItems([...selectedItems, item]);
+      }
+    } else {
+      setSelectedItems([item]);
+    }
+  };
+
+  const [isDialogDragging, setIsDialogDragging] = useState(false);
+  const dialogDragCounterRef = useRef(0);
+
+  const handleDialogDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dialogDragCounterRef.current += 1;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDialogDragging(true);
+    }
+  };
+
+  const handleDialogDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDialogDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dialogDragCounterRef.current -= 1;
+    if (dialogDragCounterRef.current === 0) {
+      setIsDialogDragging(false);
+    }
+  };
+
+  const handleDialogDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDialogDragging(false);
+    dialogDragCounterRef.current = 0;
+
+    const files = Array.from(e.dataTransfer.files || []);
+    if (files.length === 0) return;
+
+    const newItems: FileExplorerItem[] = files.map(file => {
+      return {
+        key: `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        name: file.name,
+        type: 'file',
+        size: formatFileSize(file.size),
+        modified: new Date().toLocaleString('vi-VN', { hour12: false }),
+        owner: 'user.local',
+        group: 'users',
+        permission: '-rw-r--r--',
+        mime: file.type || undefined,
+        nativeFile: file,
+      };
+    });
+
+    if (multiple) {
+      setSelectedItems(prev => [...prev, ...newItems]);
+    } else {
+      setSelectedItems([newItems[0]]);
+    }
+  };
+
+  const handleLocalFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    for (const file of files) {
+    const newItems: FileExplorerItem[] = files.map(file => {
+      return {
+        key: `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        name: file.name,
+        type: 'file',
+        size: formatFileSize(file.size),
+        modified: new Date().toLocaleString('vi-VN', { hour12: false }),
+        owner: 'user.local',
+        group: 'users',
+        permission: '-rw-r--r--',
+        mime: file.type || undefined,
+        nativeFile: file,
+      };
+    });
+
+    if (multiple) {
+      setSelectedItems(prev => [...prev, ...newItems]);
+    } else {
+      setSelectedItems([newItems[0]]);
+    }
+    if (localInputRef.current) localInputRef.current.value = '';
+  };
+
+  const handleConfirm = async () => {
+    if (!selectedItems.length || submitting) return;
+    setSubmitting(true);
+    try {
+      const resolvedFiles: File[] = [];
+      for (const item of selectedItems) {
+        if (item.nativeFile) {
+          resolvedFiles.push(item.nativeFile);
+        } else {
+          try {
+            const res = await filesApi.download(item.key);
+            const blob = res.data;
+            const mime = item.mime || blob.type || 'application/octet-stream';
+            const file = new File([blob], item.name, { type: mime, lastModified: Date.now() });
+            resolvedFiles.push(file);
+          } catch {
+            const mime = item.mime || (
+              item.name.endsWith('.pdf') ? 'application/pdf'
+              : item.name.match(/\.docx?$/i) ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+              : item.name.match(/\.xlsx?$/i) ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+              : item.name.match(/\.(png|jpe?g|webp|gif)$/i) ? 'image/jpeg'
+              : 'text/plain'
+            );
+            const dummyContent = `Tài liệu: ${item.name}\nKích thước: ${item.size}\nNgày tạo: ${item.modified}`;
+            const blob = new Blob([dummyContent], { type: mime });
+            const file = new File([blob], item.name, { type: mime, lastModified: Date.now() });
+            resolvedFiles.push(file);
+          }
+        }
+      }
+      await onSelect(resolvedFiles);
+      onClose();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const allFilesSelected = filteredEntries.filter(i => i.type === 'file').length > 0 &&
+    filteredEntries.filter(i => i.type === 'file').every(i => selectedItems.some(s => s.key === i.key));
+
+  return (
+    <Modal
+      open={open}
+      title={
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, fontWeight: 600, color: '#1E293B' }}>
+          <FolderOutlined style={{ color: '#0078d4', fontSize: 18 }} />
+          <span>{title}</span>
+        </div>
+      }
+      width="95vw"
+      style={{ top: 20, maxWidth: '1400px' }}
+      onCancel={onClose}
+      bodyStyle={{ padding: 0, height: '70vh', minHeight: '540px', display: 'flex', flexDirection: 'column', overflowY: 'hidden' }}
+      footer={
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '4px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden', flex: 1, marginRight: 16 }}>
+            <span style={{ fontSize: 13, color: '#475569', fontWeight: 500, whiteSpace: 'nowrap' }}>
+              {selectedItems.length ? `Đã chọn (${selectedItems.length}):` : 'Chưa chọn tệp nào'}
+            </span>
+            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', maxWidth: '65vw' }}>
+              {selectedItems.map(item => (
+                <span
+                  key={item.key}
+                  style={{
+                    fontSize: 12,
+                    background: '#CCE8FF',
+                    color: '#005A9E',
+                    border: '1px solid #99D1FF',
+                    borderRadius: 4,
+                    padding: '2px 8px',
+                    whiteSpace: 'nowrap',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <span style={{ fontWeight: 500 }}>{item.name}</span>
+                  <span style={{ color: '#64748B', fontSize: 11 }}>({item.size})</span>
+                  <span
+                    style={{ cursor: 'pointer', fontWeight: 'bold', fontSize: 14, color: '#D13438', marginLeft: 2 }}
+                    onClick={() => setSelectedItems(selectedItems.filter(i => i.key !== item.key))}
+                  >
+                    ×
+                  </span>
+                </span>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <Button onClick={onClose}>Hủy</Button>
+            <Button
+              type="primary"
+              disabled={!selectedItems.length || submitting}
+              loading={submitting}
+              onClick={() => void handleConfirm()}
+              style={{ background: '#0078d4' }}
+            >
+              {confirmText}{selectedItems.length ? ` (${selectedItems.length})` : ''}
+            </Button>
+          </div>
+        </div>
+      }
+    >
+      <input
+        ref={localInputRef}
+        type="file"
+        accept={accept}
+        multiple={multiple}
+        style={{ display: 'none' }}
+        onChange={handleLocalFileChange}
+      />
+
+      <div
+        className="win11-frame"
+        onDragEnter={handleDialogDragEnter}
+        onDragOver={handleDialogDragOver}
+        onDragLeave={handleDialogDragLeave}
+        onDrop={handleDialogDrop}
+        style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', height: '100%', border: 'none', borderRadius: 0, position: 'relative' }}
+      >
+        {/* Drag & Drop Visual Overlay */}
+        {isDialogDragging && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              zIndex: 1000,
+              background: 'rgba(224, 242, 241, 0.92)',
+              backdropFilter: 'blur(3px)',
+              border: '2px dashed #009688',
+              borderRadius: '6px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 12,
+              pointerEvents: 'none',
+            }}
+          >
+            <div
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: '50%',
+                background: '#FFFFFF',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 4px 14px rgba(0, 150, 136, 0.25)',
+              }}
+            >
+              <UploadOutlined style={{ fontSize: 32, color: '#009688' }} />
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ fontSize: 15, fontWeight: 700, color: '#00796B', margin: '0 0 4px 0' }}>
+                Thả tệp tin vào đây để tự động thêm & chọn
+              </p>
+              <p style={{ fontSize: 12.5, color: '#004D40', margin: 0 }}>
+                Hỗ trợ chọn nhiều tệp tin cùng lúc
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Command Bar - 100% Identical to Files.tsx */}
+        <div className="win11-cmd-bar">
+          <div className="win11-cmd-group">
+            <Dropdown
+              menu={{
+                items: [
+                  {
+                    key: 'new-file',
+                    icon: <FileTextOutlined style={{ color: '#0F6CBD', fontSize: 15 }} />,
+                    label: 'Tệp tin trống',
+                    onClick: () => {
+                      const key = `file-${Date.now()}`;
+                      const newItem: FileExplorerItem = {
+                        key,
+                        name: 'Tep_Tin_Moi.txt',
+                        type: 'file',
+                        size: '0 KB',
+                        modified: new Date().toLocaleString('vi-VN', { hour12: false }),
+                        owner: 'admin.minh',
+                        group: 'legal',
+                        permission: '644',
+                        mime: 'text/plain',
+                      };
+                      setFs(prev => ({
+                        ...prev,
+                        [currentPathStr]: [...(prev[currentPathStr] || []), newItem],
+                      }));
+                      setSelectedItems([newItem]);
+                    },
+                  },
+                  {
+                    key: 'new-folder',
+                    icon: <FolderOutlined style={{ color: '#FF9800', fontSize: 15 }} />,
+                    label: 'Thư mục',
+                    onClick: () => {
+                      const key = `dir-${Date.now()}`;
+                      const newItem: FileExplorerItem = {
+                        key,
+                        name: 'Thu_Muc_Moi',
+                        type: 'dir',
+                        size: '0 MB',
+                        modified: new Date().toLocaleString('vi-VN', { hour12: false }),
+                        owner: 'admin.minh',
+                        group: 'legal',
+                        permission: '755',
+                      };
+                      setFs(prev => ({
+                        ...prev,
+                        [currentPathStr]: [...(prev[currentPathStr] || []), newItem],
+                      }));
+                    },
+                  },
+                  { type: 'divider' as const },
+                  {
+                    key: 'upload-file',
+                    icon: <UploadOutlined style={{ color: '#009688', fontSize: 15 }} />,
+                    label: 'Tải lên',
+                    onClick: () => localInputRef.current?.click(),
+                  },
+                ],
+              }}
+              placement="bottomLeft"
+            >
+              <button className="win11-cmd-btn">
+                <PlusOutlined style={{ color: '#0078d4' }} /> Mới
+              </button>
+            </Dropdown>
+          </div>
+          <div className="win11-cmd-group">
+            <button className="win11-cmd-btn disabled"><ScissorOutlined /> Cắt</button>
+            <button className="win11-cmd-btn disabled"><CopyOutlined /> Sao chép</button>
+            <button className="win11-cmd-btn disabled"><SnippetsOutlined /> Dán</button>
+          </div>
+          <div className="win11-cmd-group">
+            <button className="win11-cmd-btn disabled"><EditOutlined /> Đổi tên</button>
+            <button className="win11-cmd-btn disabled"><DeleteOutlined style={{ color: '#d13438' }} /> Xóa</button>
+          </div>
+          <div className="win11-cmd-group" style={{ borderRight: 'none', marginLeft: 'auto' }}>
+            <button className="win11-cmd-btn"><EyeOutlined style={{ color: '#0078d4' }} /> Hiển thị</button>
+            <Segmented
+              options={[
+                { label: <><UnorderedListOutlined /> Danh sách</>, value: 'list' },
+                { label: <><AppstoreOutlined /> Lưới</>, value: 'grid' },
+              ]}
+              value={viewMode}
+              onChange={(v) => setViewMode(v as 'list' | 'grid')}
+            />
+          </div>
+        </div>
+
+        {/* Address Bar - 100% Identical to Files.tsx */}
+        <div className="win11-address-bar">
+          <button className="win11-nav-btn" onClick={handleGoBack} disabled={path.length <= 1} title="Quay lại"><ArrowLeftOutlined /></button>
+          <button className="win11-nav-btn" disabled><ArrowRightOutlined /></button>
+
+          <div
+            className="win11-path-container"
+            style={{ cursor: 'text', flex: 1, display: 'flex', alignItems: 'center' }}
+            onClick={() => {
+              setPathInput(currentDisplayPath);
+              setIsEditingPath(true);
+            }}
+          >
+            {isEditingPath ? (
+              <div style={{ display: 'flex', alignItems: 'center', width: '100%', height: '100%' }}>
+                <FolderOutlined style={{ color: '#FF9800', marginRight: 8, flexShrink: 0 }} />
+                <input
+                  autoFocus
+                  value={pathInput}
+                  onChange={e => setPathInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') handlePathInputSubmit(pathInput);
+                    else if (e.key === 'Escape') setIsEditingPath(false);
+                  }}
+                  onBlur={() => handlePathInputSubmit(pathInput)}
+                  style={{
+                    padding: 0,
+                    background: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    boxShadow: 'none',
+                    height: '100%',
+                    fontSize: 13,
+                    color: '#202020',
+                    width: '100%',
+                  }}
+                />
+              </div>
+            ) : (
+              <>
+                <FolderOutlined style={{ color: '#FF9800', marginRight: 8, flexShrink: 0 }} />
+                <div style={{ display: 'flex', alignItems: 'center', height: '100%', overflow: 'hidden', whiteSpace: 'nowrap', minWidth: 0 }}>
+                  {path.map((p, i) => (
+                    <React.Fragment key={i}>
+                      <span
+                        className="win11-breadcrumb-item"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleBreadcrumbClick(i);
+                        }}
+                        style={{ cursor: 'pointer', padding: '2px 4px', borderRadius: 4 }}
+                      >
+                        {i === 0 ? '/' : p}
+                      </span>
+                      <span className="win11-breadcrumb-separator" style={{ margin: '0 4px', color: '#94A3B8' }}>
+                        &gt;
+                      </span>
+                    </React.Fragment>
+                  ))}
+                </div>
+                <div
+                  style={{ flex: 1, height: '100%', cursor: 'text' }}
+                  onClick={() => {
+                    setPathInput(currentDisplayPath);
+                    setIsEditingPath(true);
+                  }}
+                />
+              </>
+            )}
+          </div>
+
+          <input
+            type="text"
+            className="win11-search-input"
+            placeholder="Tìm kiếm..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={{ paddingLeft: 8, outline: 'none' }}
+          />
+        </div>
+
+        {/* Main Content Area */}
+        <div className="win11-main" style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+          {filteredEntries.length === 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94A3B8', gap: 10 }}>
+              <FolderOutlined style={{ fontSize: 52, color: '#CBD5E1' }} />
+              <span style={{ fontSize: 14 }}>Thư mục trống hoặc không tìm thấy tệp phù hợp</span>
+            </div>
+          ) : viewMode === 'grid' ? (
+            <div style={{ padding: '12px 16px', width: '100%', boxSizing: 'border-box' }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(115px, 1fr))',
+                  gap: '8px 12px',
+                  width: '100%',
+                }}
+              >
+                {filteredEntries.map(item => {
+                  const isSelected = selectedItems.some(i => i.key === item.key);
+                  const ext = item.name.split('.').pop()?.toLowerCase() || '';
+
+                  let fileIcon = <FileOutlined style={{ fontSize: 46, color: '#64748B' }} />;
+                  if (item.type === 'dir') {
+                    fileIcon = <FolderOutlined style={{ fontSize: 46, color: '#F59E0B' }} />;
+                  } else if (ext === 'pdf') {
+                    fileIcon = <FilePdfOutlined style={{ fontSize: 46, color: '#E11D48' }} />;
+                  } else if (['doc', 'docx'].includes(ext)) {
+                    fileIcon = <FileWordOutlined style={{ fontSize: 46, color: '#2563EB' }} />;
+                  } else if (['xls', 'xlsx', 'csv'].includes(ext)) {
+                    fileIcon = <FileExcelOutlined style={{ fontSize: 46, color: '#16A34A' }} />;
+                  } else if (['png', 'jpg', 'jpeg', 'svg', 'webp', 'gif'].includes(ext)) {
+                    fileIcon = <FileImageOutlined style={{ fontSize: 46, color: '#8B5CF6' }} />;
+                  } else if (['zip', 'rar', 'tar', 'gz', '7z'].includes(ext)) {
+                    fileIcon = <FileZipOutlined style={{ fontSize: 46, color: '#D97706' }} />;
+                  } else if (['txt', 'log', 'md', 'json', 'xml', 'yml', 'yaml'].includes(ext)) {
+                    fileIcon = <FileTextOutlined style={{ fontSize: 46, color: '#009688' }} />;
+                  }
+
+                  return (
+                    <div
+                      key={item.key}
+                      className={`win11-grid-item ${isSelected ? 'selected' : ''}`}
+                      onClick={() => handleToggleSelect(item)}
+                      onDoubleClick={() => {
+                        if (item.type === 'dir') handleOpenDir(item);
+                        else {
+                          setSelectedItems([item]);
+                          setTimeout(() => handleConfirm(), 50);
+                        }
+                      }}
+                      style={{
+                        background: isSelected ? '#CCE8FF' : 'transparent',
+                        border: isSelected ? '1px solid #99D1FF' : '1px solid transparent',
+                        borderRadius: '4px',
+                        padding: '6px 4px',
+                        textAlign: 'center',
+                        cursor: 'default',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'flex-start',
+                        height: '115px',
+                        boxSizing: 'border-box',
+                        position: 'relative',
+                        userSelect: 'none',
+                      }}
+                    >
+                      <div style={{ margin: '4px 0' }}>{fileIcon}</div>
+                      <span
+                        style={{
+                          fontSize: 12,
+                          color: '#202020',
+                          lineHeight: '14px',
+                          maxHeight: '28px',
+                          overflow: 'hidden',
+                          wordBreak: 'break-word',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          width: '100%',
+                        }}
+                        title={item.name}
+                      >
+                        {item.name}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #E5E7EB', color: '#64748B', height: 38, fontSize: 13, fontWeight: 600, background: '#FAFAFA' }}>
+                    <th style={{ padding: '0 8px 0 16px', width: 36 }}>
+                      <input
+                        type="checkbox"
+                        checked={allFilesSelected}
+                        onChange={e => handleSelectAll(e.target.checked)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                    </th>
+                    <th style={{ padding: '0 12px' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        Tên <span style={{ fontSize: 10, color: '#94A3B8' }}>⇅</span>
+                      </span>
+                    </th>
+                    <th style={{ padding: '0 12px', width: 100 }}>Loại</th>
+                    <th style={{ padding: '0 12px', width: 120 }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        Dung lượng <span style={{ fontSize: 10, color: '#94A3B8' }}>⇅</span>
+                      </span>
+                    </th>
+                    <th style={{ padding: '0 12px', width: 130 }}>Chủ sở hữu</th>
+                    <th style={{ padding: '0 12px', width: 100 }}>Nhóm</th>
+                    <th style={{ padding: '0 12px', width: 100 }}>Quyền hạn</th>
+                    <th style={{ padding: '0 12px', width: 120 }}>Định dạng</th>
+                    <th style={{ padding: '0 12px', width: 150 }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        Chỉnh sửa <span style={{ fontSize: 10, color: '#94A3B8' }}>⇅</span>
+                      </span>
+                    </th>
+                    <th style={{ padding: '0 12px', width: 85, textAlign: 'center' }}>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredEntries.map(item => {
+                    const isSelected = selectedItems.some(i => i.key === item.key);
+                    const ext = item.name.split('.').pop()?.toLowerCase() || '';
+                    let formatStr = 'File folder';
+                    if (item.type !== 'dir') {
+                      formatStr = ext ? `${ext.toUpperCase()} File` : 'File';
+                    }
+
+                    const rowActionMenu = {
+                      items: [
+                        {
+                          key: 'preview',
+                          icon: <EyeOutlined style={{ fontSize: 14 }} />,
+                          label: 'Xem trước',
+                          onClick: () => {
+                            if (item.type === 'dir') handleOpenDir(item);
+                            else handleToggleSelect(item);
+                          },
+                        },
+                        {
+                          key: 'sign',
+                          icon: <SafetyCertificateOutlined style={{ color: '#009688', fontSize: 14 }} />,
+                          label: 'Ký số',
+                          disabled: item.type === 'dir',
+                          onClick: () => handleToggleSelect(item),
+                        },
+                        {
+                          key: 'rename',
+                          icon: <EditOutlined style={{ fontSize: 14 }} />,
+                          label: 'Đổi tên',
+                          onClick: () => {},
+                        },
+                        {
+                          key: 'copy',
+                          icon: <CopyOutlined style={{ fontSize: 14 }} />,
+                          label: 'Sao chép',
+                          onClick: () => {},
+                        },
+                        {
+                          key: 'cut',
+                          icon: <ScissorOutlined style={{ fontSize: 14 }} />,
+                          label: 'Cắt',
+                          onClick: () => {},
+                        },
+                        {
+                          key: 'compress',
+                          icon: <FileZipOutlined style={{ fontSize: 14 }} />,
+                          label: 'Nén',
+                          onClick: () => {},
+                        },
+                        {
+                          key: 'permission',
+                          icon: <InfoCircleOutlined style={{ fontSize: 14 }} />,
+                          label: 'Phân quyền',
+                          onClick: () => {},
+                        },
+                        { type: 'divider' as const },
+                        {
+                          key: 'download',
+                          icon: <DownloadOutlined style={{ fontSize: 14 }} />,
+                          label: 'Tải xuống',
+                          disabled: item.type === 'dir',
+                          onClick: () => {},
+                        },
+                        {
+                          key: 'delete',
+                          icon: <DeleteOutlined style={{ color: '#D13438', fontSize: 14 }} />,
+                          label: 'Xóa',
+                          danger: true,
+                          onClick: () => {
+                            setFs(prev => ({
+                              ...prev,
+                              [currentPathStr]: (prev[currentPathStr] || []).filter(i => i.key !== item.key),
+                            }));
+                            setSelectedItems(prev => prev.filter(i => i.key !== item.key));
+                          },
+                        },
+                      ],
+                    };
+
+                    return (
+                      <tr
+                        key={item.key}
+                        onClick={() => handleToggleSelect(item)}
+                        onDoubleClick={() => {
+                          if (item.type === 'dir') handleOpenDir(item);
+                          else {
+                            setSelectedItems([item]);
+                            setTimeout(() => handleConfirm(), 50);
+                          }
+                        }}
+                        style={{
+                          borderBottom: '1px solid #F3F4F6',
+                          height: 38,
+                          cursor: 'pointer',
+                          backgroundColor: isSelected ? '#CCE8FF' : 'transparent',
+                          transition: 'background 0.1s',
+                        }}
+                        onMouseEnter={e => {
+                          if (!isSelected) e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.04)';
+                        }}
+                        onMouseLeave={e => {
+                          if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
+                      >
+                        <td style={{ padding: '0 8px 0 16px', width: 36 }} onClick={e => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            disabled={item.type === 'dir'}
+                            onChange={() => handleToggleSelect(item)}
+                            style={{ cursor: item.type === 'dir' ? 'default' : 'pointer' }}
+                          />
+                        </td>
+                        <td style={{ padding: '0 12px', display: 'flex', alignItems: 'center', gap: 8, height: 38 }}>
+                          {item.type === 'dir' ? (
+                            <FolderOutlined style={{ color: '#FF9800', fontSize: 16 }} />
+                          ) : (
+                            <FileOutlined style={{ color: '#999', fontSize: 16 }} />
+                          )}
+                          <span style={{ color: item.type === 'dir' ? '#009688' : '#333', fontWeight: item.type === 'dir' ? 600 : 400 }}>
+                            {item.name}
+                          </span>
+                        </td>
+                        <td style={{ padding: '0 12px' }}>
+                          <span style={{
+                            background: item.type === 'dir' ? '#FFF7ED' : '#F1F5F9',
+                            border: item.type === 'dir' ? '1px solid #FED7AA' : '1px solid #E2E8F0',
+                            color: item.type === 'dir' ? '#EA580C' : '#475569',
+                            padding: '1px 6px',
+                            borderRadius: 4,
+                            fontSize: 12,
+                          }}>
+                            {item.type === 'dir' ? 'Thư mục' : 'Tệp'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '0 12px', color: '#475569', fontSize: 12.5 }}>
+                          {item.size}
+                        </td>
+                        <td style={{ padding: '0 12px', fontSize: 12.5, color: '#333' }}>
+                          {item.owner || 'admin.minh'}
+                        </td>
+                        <td style={{ padding: '0 12px', fontSize: 12.5, color: '#333' }}>
+                          {item.group || 'legal'}
+                        </td>
+                        <td style={{ padding: '0 12px', fontSize: 12, color: '#475569', fontFamily: 'monospace' }}>
+                          {item.permission || '644'}
+                        </td>
+                        <td style={{ padding: '0 12px', fontSize: 12, color: '#64748B' }}>
+                          {formatStr}
+                        </td>
+                        <td style={{ padding: '0 12px', fontSize: 12, color: '#475569' }}>
+                          {item.modified}
+                        </td>
+                        <td style={{ padding: '0 12px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                          <div style={{ display: 'inline-flex', gap: 4 }}>
+                            <Dropdown
+                              menu={rowActionMenu}
+                              placement="bottomRight"
+                            >
+                              <button
+                                style={{
+                                  width: 22,
+                                  height: 22,
+                                  border: '1px solid #D9D9D9',
+                                  background: '#FFF',
+                                  borderRadius: 4,
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  padding: 0,
+                                }}
+                              >
+                                <DownOutlined style={{ fontSize: 9, color: '#666' }} />
+                              </button>
+                            </Dropdown>
+                            <button
+                              onClick={() => {
+                                setFs(prev => ({
+                                  ...prev,
+                                  [currentPathStr]: (prev[currentPathStr] || []).filter(i => i.key !== item.key),
+                                }));
+                                setSelectedItems(prev => prev.filter(i => i.key !== item.key));
+                              }}
+                              style={{
+                                width: 22,
+                                height: 22,
+                                border: '1px solid #FFCCC7',
+                                background: '#FFF',
+                                borderRadius: 4,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: 0,
+                              }}
+                            >
+                              <DeleteOutlined style={{ fontSize: 11, color: '#FF4D4F' }} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+export interface UploadProps {
+  children?: React.ReactNode;
+  customRequest?: (options: { file: File; onSuccess: (value?: any) => void; onError: (error: any) => void }) => void;
+  onChange?: (info: { file: File; fileList: File[] }) => void;
+  beforeUpload?: (file: File, files: File[]) => boolean | Promise<boolean>;
+  maxCount?: number;
+  showUploadList?: boolean;
+  accept?: string;
+  multiple?: boolean;
+}
+
+export const Upload: React.FC<UploadProps> & { Dragger: React.FC<any> } = (({ children, customRequest, onChange, beforeUpload, maxCount, accept, multiple }) => {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const processFiles = async (files: File[]) => {
+    const selected = maxCount ? files.slice(0, maxCount) : files;
+    for (const file of selected) {
       if (beforeUpload) {
-        const allowed = await beforeUpload(file, files);
+        const allowed = await beforeUpload(file, selected);
         if (allowed === false) continue;
       }
-
       if (customRequest) {
         customRequest({
           file,
-          onSuccess: (res: any) => {
-            onChange && onChange({ file, fileList: [file] });
-          },
-          onError: (err: any) => {
-            console.error(err);
-          }
+          onSuccess: () => onChange && onChange({ file, fileList: [file] }),
+          onError: (err: any) => console.error(err),
         });
       } else {
         onChange && onChange({ file, fileList: [file] });
@@ -2862,19 +4751,26 @@ export const Upload: React.FC<any> = ({ children, customRequest, onChange, befor
     }
   };
 
-  return (
-    <div onClick={() => fileInputRef.current?.click()} style={{ display: 'inline-block' }}>
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        style={{ display: 'none' }}
-        multiple={maxCount ? maxCount > 1 : true}
-      />
-      {children}
-    </div>
-  );
+  return <><div onClick={() => setPickerOpen(true)} style={{ display: 'inline-block' }}>{children}</div><FileUploadDialog open={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={processFiles} accept={accept} multiple={multiple ?? (maxCount ? maxCount > 1 : true)} /></>;
+}) as any;
+
+const UploadDragger: React.FC<any> = ({ children, onChange, beforeUpload, maxCount, accept, multiple, style }) => {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const processFiles = async (files: File[]) => {
+    const selected = maxCount ? files.slice(0, maxCount) : files;
+    for (const file of selected) {
+      if (beforeUpload) {
+        const allowed = await beforeUpload(file, selected);
+        if (allowed === false) continue;
+      }
+      onChange && onChange({ file, fileList: [file] });
+    }
+  };
+
+  return <><div onClick={() => setPickerOpen(true)} style={{ border: '2px dashed #CBD5E1', borderRadius: 8, padding: '20px 16px', textAlign: 'center', background: '#FAFAFA', cursor: 'pointer', transition: 'all 0.2s', ...style }}>{children}</div><FileUploadDialog open={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={processFiles} accept={accept} multiple={multiple ?? (maxCount ? maxCount > 1 : true)} /></>;
 };
+
+Upload.Dragger = UploadDragger;
 
 // ==========================================
 // 41. message
@@ -2883,10 +4779,14 @@ let messageContainer: HTMLDivElement | null = null;
 const activeMessages = new Map<string | number, HTMLDivElement>();
 let msgId = 0;
 
-const createMessage = (content: any, type: 'success' | 'error' | 'warning' | 'info' | 'loading') => {
+const createMessage = (
+  content: any,
+  type: 'success' | 'error' | 'warning' | 'info' | 'loading',
+  explicitDuration?: number,
+): Promise<void> => {
   let contentText = '';
   let msgKey: string | number | undefined = undefined;
-  let duration = 3;
+  let duration = explicitDuration ?? 3;
 
   if (typeof content === 'object' && content !== null) {
     contentText = content.content || '';
@@ -2901,21 +4801,32 @@ const createMessage = (content: any, type: 'success' | 'error' | 'warning' | 'in
   if (!messageContainer) {
     messageContainer = document.createElement('div');
     messageContainer.style.position = 'fixed';
-    messageContainer.style.top = '16px';
+    messageContainer.style.top = '20px';
     messageContainer.style.left = '50%';
     messageContainer.style.transform = 'translateX(-50%)';
-    messageContainer.style.zIndex = '9999';
+    messageContainer.style.zIndex = '999999';
     messageContainer.style.display = 'flex';
     messageContainer.style.flexDirection = 'column';
+    messageContainer.style.alignItems = 'center';
     messageContainer.style.gap = '10px';
     messageContainer.style.pointerEvents = 'none';
+    messageContainer.style.width = 'max-content';
+    messageContainer.style.maxWidth = 'calc(100vw - 32px)';
     document.body.appendChild(messageContainer);
   }
+
+  // Prevent duplicate toast spamming (e.g. 10 identical error popups stacking)
+  const existingSameMsg = Array.from(messageContainer.children).find((child: any) => {
+    return child.dataset && child.dataset.msgType === type && child.dataset.msgContent === contentText;
+  }) as HTMLDivElement | undefined;
 
   let msgEl: HTMLDivElement;
   let isUpdate = false;
 
-  if (msgKey !== undefined && activeMessages.has(msgKey)) {
+  if (existingSameMsg) {
+    msgEl = existingSameMsg;
+    isUpdate = true;
+  } else if (msgKey !== undefined && activeMessages.has(msgKey)) {
     msgEl = activeMessages.get(msgKey)!;
     isUpdate = true;
   } else {
@@ -2923,11 +4834,16 @@ const createMessage = (content: any, type: 'success' | 'error' | 'warning' | 'in
     msgEl.style.background = '#fff';
     msgEl.style.padding = '9px 16px';
     msgEl.style.borderRadius = '8px';
-    msgEl.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12)';
-    msgEl.style.display = 'flex';
+    msgEl.style.border = '1px solid rgba(0, 0, 0, 0.06)';
+    msgEl.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.04)';
+    msgEl.style.display = 'inline-flex';
     msgEl.style.alignItems = 'center';
+    msgEl.style.justifyContent = 'center';
     msgEl.style.gap = '8px';
     msgEl.style.fontSize = '14px';
+    msgEl.style.width = 'fit-content';
+    msgEl.style.maxWidth = 'min(500px, calc(100vw - 32px))';
+    msgEl.style.boxSizing = 'border-box';
     msgEl.style.pointerEvents = 'auto';
     msgEl.style.transition = 'all 0.3s cubic-bezier(0.645, 0.045, 0.355, 1)';
     msgEl.style.transform = 'translateY(-20px)';
@@ -2954,6 +4870,9 @@ const createMessage = (content: any, type: 'success' | 'error' | 'warning' | 'in
     color = 'var(--antd-primary, #009688)';
   }
 
+  msgEl.dataset.msgType = type;
+  msgEl.dataset.msgContent = contentText;
+
   msgEl.innerHTML = `
     <span style="color: ${color}; display: inline-flex; align-items: center;">${iconSvg}</span>
     <span style="color: var(--antd-text); font-weight: normal;">${contentText}</span>
@@ -2966,7 +4885,10 @@ const createMessage = (content: any, type: 'success' | 'error' | 'warning' | 'in
       msgEl.style.opacity = '1';
     }, 10);
   } else {
-    msgEl.style.transform = 'translateY(0)';
+    msgEl.style.transform = 'scale(1.05)';
+    setTimeout(() => {
+      msgEl.style.transform = 'scale(1)';
+    }, 120);
     msgEl.style.opacity = '1';
   }
 
@@ -2979,7 +4901,8 @@ const createMessage = (content: any, type: 'success' | 'error' | 'warning' | 'in
     clearTimeout(oldTimeout);
   }
 
-  const removeMsg = () => {
+  return new Promise((resolve) => {
+    const removeMsg = () => {
     msgEl.style.transform = 'translateY(-20px)';
     msgEl.style.opacity = '0';
     setTimeout(() => {
@@ -2987,20 +4910,22 @@ const createMessage = (content: any, type: 'success' | 'error' | 'warning' | 'in
       if (msgKey !== undefined) {
         activeMessages.delete(msgKey);
       }
+        resolve();
     }, 300);
-  };
+    };
 
-  if (duration > 0) {
-    (msgEl as any).timeoutId = setTimeout(removeMsg, duration * 1000);
-  }
+    if (duration > 0) {
+      (msgEl as any).timeoutId = setTimeout(removeMsg, duration * 1000);
+    }
+  });
 };
 
 export const message = {
-  success: (content: any) => createMessage(content, 'success'),
-  error: (content: any) => createMessage(content, 'error'),
-  warning: (content: any) => createMessage(content, 'warning'),
-  info: (content: any) => createMessage(content, 'info'),
-  loading: (content: any) => createMessage(content, 'loading'),
+  success: (content: any, duration?: number) => createMessage(content, 'success', duration),
+  error: (content: any, duration?: number) => createMessage(content, 'error', duration),
+  warning: (content: any, duration?: number) => createMessage(content, 'warning', duration),
+  info: (content: any, duration?: number) => createMessage(content, 'info', duration),
+  loading: (content: any, duration?: number) => createMessage(content, 'loading', duration),
 };
 
 // ==========================================
@@ -3017,7 +4942,7 @@ export const Row: React.FC<any> = ({
   className = '',
 }) => {
   const gutterVal: [number, number] = Array.isArray(gutter)
-    ? gutter
+    ? [gutter[0] ?? 0, gutter[1] ?? gutter[0] ?? 0]
     : typeof gutter === 'number'
       ? [gutter, gutter]
       : [0, 0];
@@ -3196,38 +5121,17 @@ Collapse.Panel = ({ header, children, isActive, onToggle, ghost, style }) => {
   );
 };
 
-// ==========================================
-// 44. Radio & Radio.Group
-// ==========================================
-export const Radio: React.FC<{ checked?: boolean; onChange?: (e: any) => void; disabled?: boolean; children?: React.ReactNode; style?: React.CSSProperties; value?: any }> = ({ checked, onChange, disabled, children, style, value }) => {
-  const isChecked = !!checked;
-  return (
-    <label className={`ant-radio-wrapper ${disabled ? 'ant-radio-wrapper-disabled' : ''}`} style={{ display: 'inline-flex', alignItems: 'center', cursor: disabled ? 'not-allowed' : 'pointer', ...style }}>
-      <span className={`ant-radio ${isChecked ? 'ant-radio-checked' : ''} ${disabled ? 'ant-radio-disabled' : ''}`}>
-        <input
-          type="radio"
-          checked={isChecked}
-          disabled={disabled}
-          onChange={(e) => onChange && onChange({ target: { checked: e.target.checked, value } })}
-          className="ant-radio-input"
-        />
-        <span className="ant-radio-inner" />
-      </span>
-      {children !== undefined && <span>{children}</span>}
-    </label>
-  );
-};
-
 const RadioGroupContext = createContext<{ value?: any; onChange?: (e: any) => void; disabled?: boolean }>({});
 
-export const RadioGroup: React.FC<{ value?: any; onChange?: (e: any) => void; disabled?: boolean; children?: React.ReactNode; style?: React.CSSProperties }> = ({ value, onChange, disabled, children, style }) => {
+export const RadioGroup: React.FC<{ value?: any; onChange?: (e: any) => void; disabled?: boolean; children?: React.ReactNode; style?: React.CSSProperties; optionType?: string; buttonStyle?: string }> = ({ value, onChange, disabled, children, style }) => {
   return (
     <RadioGroupContext.Provider value={{ value, onChange, disabled }}>
       <div className="ant-radio-group" style={{ display: 'inline-flex', gap: 16, ...style }}>
         {React.Children.map(children, (child) => {
           if (React.isValidElement(child)) {
-            const childProps = child.props as any;
-            return React.cloneElement(child, {
+            const radioChild = child as React.ReactElement<any>;
+            const childProps = radioChild.props;
+            return React.cloneElement(radioChild, {
               checked: String(value) === String(childProps.value),
               disabled: disabled || childProps.disabled,
               onChange: (e: any) => {
@@ -3242,7 +5146,79 @@ export const RadioGroup: React.FC<{ value?: any; onChange?: (e: any) => void; di
     </RadioGroupContext.Provider>
   );
 };
-(Radio as any).Group = RadioGroup;
+
+export const RadioButton: React.FC<{
+  checked?: boolean;
+  onChange?: (e: any) => void;
+  disabled?: boolean;
+  children?: React.ReactNode;
+  style?: React.CSSProperties;
+  value?: any;
+}> = ({ checked, onChange, disabled, children, style, value }) => {
+  const isChecked = !!checked;
+  return (
+    <label
+      className={`ant-radio-button-wrapper ${isChecked ? 'ant-radio-button-wrapper-checked' : ''} ${disabled ? 'ant-radio-button-wrapper-disabled' : ''}`}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: 32,
+        padding: '4px 12px',
+        border: '1px solid var(--antd-border)',
+        borderRadius: 6,
+        background: isChecked ? '#E0F2F1' : '#FFFFFF',
+        color: isChecked ? '#00796B' : '#475569',
+        fontWeight: isChecked ? 700 : 500,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        whiteSpace: 'nowrap',
+        userSelect: 'none',
+        gap: 6,
+        opacity: disabled ? 0.65 : 1,
+        ...style,
+      }}
+    >
+      <input
+        type="radio"
+        checked={isChecked}
+        disabled={disabled}
+        onChange={(e) => onChange && onChange({ target: { checked: e.target.checked, value } })}
+        style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
+      />
+      {children}
+    </label>
+  );
+};
+
+interface RadioComponentType extends React.FC<{ checked?: boolean; onChange?: (e: any) => void; disabled?: boolean; children?: React.ReactNode; style?: React.CSSProperties; value?: any }> {
+  Group: typeof RadioGroup;
+  Button: typeof RadioButton;
+}
+
+export const Radio: RadioComponentType = Object.assign(
+  (({ checked, onChange, disabled, children, style, value }: any) => {
+    const isChecked = !!checked;
+    return (
+      <label className={`ant-radio-wrapper ${disabled ? 'ant-radio-wrapper-disabled' : ''}`} style={{ display: 'inline-flex', alignItems: 'center', cursor: disabled ? 'not-allowed' : 'pointer', ...style }}>
+        <span className={`ant-radio ${isChecked ? 'ant-radio-checked' : ''} ${disabled ? 'ant-radio-disabled' : ''}`}>
+          <input
+            type="radio"
+            checked={isChecked}
+            disabled={disabled}
+            onChange={(e) => onChange && onChange({ target: { checked: e.target.checked, value } })}
+            className="ant-radio-input"
+          />
+          <span className="ant-radio-inner" />
+        </span>
+        {children !== undefined && <span>{children}</span>}
+      </label>
+    );
+  }) as any,
+  {
+    Group: RadioGroup,
+    Button: RadioButton,
+  }
+);
 
 // ==========================================
 // 45. Steps
@@ -3257,11 +5233,13 @@ interface StepsProps {
   items?: StepItem[];
   style?: React.CSSProperties;
   className?: string;
+  direction?: 'horizontal' | 'vertical' | string;
+  size?: 'default' | 'small' | string;
 }
 
-export const Steps: React.FC<StepsProps> = ({ current = 0, items = [], style, className = '' }) => {
+export const Steps: React.FC<StepsProps> = ({ current = 0, items = [], style, className = '', direction = 'horizontal' }) => {
   return (
-    <div className={`ant-steps ${className}`} style={{ display: 'flex', alignItems: 'center', width: '100%', gap: 16, ...style }}>
+    <div className={`ant-steps ${className}`} style={{ display: 'flex', flexDirection: direction === 'vertical' ? 'column' : 'row', alignItems: direction === 'vertical' ? 'flex-start' : 'center', width: '100%', gap: 16, ...style }}>
       {items.map((item, idx) => {
         let status: 'finish' | 'process' | 'wait' = 'wait';
         if (item.status) {
@@ -3304,7 +5282,7 @@ export const Steps: React.FC<StepsProps> = ({ current = 0, items = [], style, cl
                 }}
               >
                 {status === 'finish' ? (
-                  <span style={{ fontSize: 12, fontWeight: 'bold' }}>✓</span>
+                  <CheckOutlined style={{ fontSize: 12, fontWeight: 'bold' }} />
                 ) : (
                   idx + 1
                 )}
@@ -3355,6 +5333,9 @@ export const Popover: React.FC<{
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const activeOpen = open !== undefined ? open : isOpen;
+  const { shouldRender: shouldRenderPopover, animClass: popoverAnimClass, overlayRef: popoverOverlayRef } = useOverlayAnimation(activeOpen, 140);
+
   useEffect(() => {
     if (open !== undefined) setIsOpen(open);
   }, [open]);
@@ -3379,9 +5360,10 @@ export const Popover: React.FC<{
       <div onClick={toggle} style={{ display: 'inline-block' }}>
         {children}
       </div>
-      {isOpen && (
+      {shouldRenderPopover && (
         <div
-          className={`ant-popover ant-popover-placement-${placement}`}
+          ref={popoverOverlayRef}
+          className={`ant-popover ant-popover-placement-${placement} ${popoverAnimClass === 'enter' ? 'k-pop-enter' : 'k-pop-exit'}`}
           style={{
             position: 'absolute',
             ...(placement === 'top' ? { bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 12 } : {}),
@@ -3703,10 +5685,10 @@ export const Pagination: React.FC<PaginationProps> = ({
           onChange={handlePageSizeChange}
           disabled={disabled}
           options={[
-            { label: `10 / ${typeof window !== 'undefined' && localStorage.getItem('kpanel_lang') === 'vi' ? 'trang' : 'page'}`, value: 10 },
-            { label: `20 / ${typeof window !== 'undefined' && localStorage.getItem('kpanel_lang') === 'vi' ? 'trang' : 'page'}`, value: 20 },
-            { label: `50 / ${typeof window !== 'undefined' && localStorage.getItem('kpanel_lang') === 'vi' ? 'trang' : 'page'}`, value: 50 },
-            { label: `100 / ${typeof window !== 'undefined' && localStorage.getItem('kpanel_lang') === 'vi' ? 'trang' : 'page'}`, value: 100 },
+            { label: `10 / ${(typeof window !== 'undefined' && (localStorage.getItem('minepanel_lang') === 'vi' || localStorage.getItem('kpanel_lang') === 'vi')) ? 'trang' : 'page'}`, value: 10 },
+            { label: `20 / ${(typeof window !== 'undefined' && (localStorage.getItem('minepanel_lang') === 'vi' || localStorage.getItem('kpanel_lang') === 'vi')) ? 'trang' : 'page'}`, value: 20 },
+            { label: `50 / ${(typeof window !== 'undefined' && (localStorage.getItem('minepanel_lang') === 'vi' || localStorage.getItem('kpanel_lang') === 'vi')) ? 'trang' : 'page'}`, value: 50 },
+            { label: `100 / ${(typeof window !== 'undefined' && (localStorage.getItem('minepanel_lang') === 'vi' || localStorage.getItem('kpanel_lang') === 'vi')) ? 'trang' : 'page'}`, value: 100 },
           ]}
           style={{ width: 100, marginLeft: 8 }}
         />
@@ -3714,5 +5696,3 @@ export const Pagination: React.FC<PaginationProps> = ({
     </div>
   );
 };
-
-

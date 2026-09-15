@@ -145,7 +145,7 @@ const Dashboard: React.FC = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <div>
           <Text style={{ color: '#757575', fontSize: 13 }}>{time.toLocaleDateString(localeMap[language] || 'vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} — {time.toLocaleTimeString(localeMap[language] || 'vi-VN')}</Text>
         </div>
@@ -155,7 +155,7 @@ const Dashboard: React.FC = () => {
         </Space>
       </div>
 
-      <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
+      <Row gutter={[12, 12]} style={{ marginBottom: 8 }}>
         {systemOverview.map((s, i) => (
           <Col xs={12} sm={6} xl={3} key={i}>
             <Card size="small" styles={{ body: { padding: '12px' } }}>
@@ -172,7 +172,7 @@ const Dashboard: React.FC = () => {
         ))}
       </Row>
 
-      <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
+      <Row gutter={[12, 12]} style={{ marginBottom: 8 }}>
         {statusCards.map((s, i) => (
           <Col xs={12} sm={6} xl={3} key={i}>
             <Card size="small" styles={{ body: { padding: '12px' } }}>
@@ -188,7 +188,7 @@ const Dashboard: React.FC = () => {
         ))}
       </Row>
 
-      <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
+      <Row gutter={[12, 12]} style={{ marginBottom: 8 }}>
         <Col xs={24} sm={12} md={6}>
           <Card size="small" title={<Text strong style={{ fontSize: 13 }}>{t('dashboard.storageAnalytics')}</Text>} styles={{ body: { padding: '12px' } }}>
             <div style={{ marginBottom: 8 }}><div style={{ display: 'flex', justifyContent: 'space-between' }}><Text style={{ fontSize: 12 }}>{t('dashboard.storageSystem')}</Text><Text style={{ fontSize: 12 }}>32 GB</Text></div><Progress percent={45} size="small" showInfo={false} strokeColor="#009688" /></div>
@@ -228,11 +228,11 @@ const Dashboard: React.FC = () => {
 
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={14}>
-          <div style={{ marginBottom: 12 }}><Text strong>{t('dashboard.topResources')}</Text></div>
+          <div style={{ marginBottom: 8 }}><Text strong>{t('dashboard.topResources')}</Text></div>
           <KTable viewKeyPrefix="dash-resources" dataSource={safeServers.map(s => ({ ...s, key: s.id }))} columns={resourceColumns} pagination={false} size="small" locale={{ emptyText: t('dashboard.noServers') }} />
         </Col>
         <Col xs={24} xl={10}>
-          <div style={{ marginBottom: 12 }}><Text strong>{t('dashboard.recentLogs')}</Text></div>
+          <div style={{ marginBottom: 8 }}><Text strong>{t('dashboard.recentLogs')}</Text></div>
           <KTable viewKeyPrefix="dash-logs" dataSource={(Array.isArray(stats?.recentLogs) ? stats.recentLogs : []).map(l => ({ ...l, key: l.id }))} columns={logColumns} pagination={false} size="small" locale={{ emptyText: t('dashboard.noRecentLogs') }} />
         </Col>
       </Row>

@@ -1,19 +1,21 @@
 # Kpanel
 
-Kpanel là bảng quản trị máy chủ và dự án đang phát triển, gồm API NestJS lưu dữ liệu trong PostgreSQL và giao diện React. Bản hiện tại có đăng nhập JWT, quản lý bản ghi máy chủ/dự án/cơ sở dữ liệu/tài khoản, dashboard, nhật ký và AI Center. Nhiều màn hình vận hành sử dụng dữ liệu mô phỏng; chưa phải hệ thống điều khiển VPS hoàn chỉnh.
+Kpanel là bảng quản trị máy chủ và dự án toàn diện, gồm Backend Rust (Axum + Tokio + SQLx + PostgreSQL), API NestJS kế thừa và giao diện React hiện đại (Ant Design + Custom UI System). Bản hiện tại có xác thực JWT, quản lý bản ghi máy chủ/dự án/cơ sở dữ liệu/tài khoản, dashboard giám sát, nhật ký, AI Center và terminal WebSocket.
 
 ## Cấu trúc
 
 ```text
 kpanel/
-├── api/                  # NestJS, TypeORM, PostgreSQL
-├── app/                  # React, Vite, giao diện quản trị
-└── docker-compose.yml    # PostgreSQL, Redis, API và Nginx
+├── backend/              # Rust (Axum, Tokio, SQLx, PostgreSQL) - Backend hiệu năng cao
+├── app/                  # React 18, Vite 5, Ant Design, Kiyovn Custom UI System
+├── api/                  # NestJS, TypeORM (Legacy API)
+└── docker-compose.yml    # PostgreSQL, Redis, Rust Backend và Nginx Frontend
 ```
 
-`api/` tương ứng thư mục `backend` của nguồn gốc; `app/` tương ứng `frontend`. Đây là đường dẫn mã nguồn trong repository, không phải tiền tố URL. API vẫn dùng `/api/v1`, giao diện dùng các route từ `/`.
+`backend/` là backend chính bằng Rust; `app/` là giao diện quản trị React; `api/` là backend NestJS kế thừa.
+API sử dụng tiền tố `/api/v1`, giao diện dùng các route từ `/`.
 
-Hướng dẫn chi tiết: [API](api/README.md) · [Giao diện](app/README.md) · [Repository](../README.md).
+Hướng dẫn chi tiết: [Giao diện](app/README.md) · [NestJS API](api/README.md) · [Repository](../README.md).
 
 ## Phạm vi đã có
 

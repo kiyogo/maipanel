@@ -247,7 +247,7 @@ const Servers: React.FC = () => {
     <div>
 
 
-      <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
+      <Row gutter={[16, 16]} style={{ marginBottom: 8 }}>
         {[
           { label: t('servers.statTotal'), value: safeServers.length },
           { label: t('servers.statActive'), value: safeServers.filter(s => s.status === 'online').length },
@@ -262,7 +262,7 @@ const Servers: React.FC = () => {
         ))}
       </Row>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 0 }}>
         <Input prefix={<SearchOutlined style={{ color: '#bbb' }} />} placeholder={t('servers.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} style={{ width: 320, borderRadius: 6 }} allowClear />
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>{t('servers.addServer')}</Button>
       </div>
@@ -290,7 +290,7 @@ const Servers: React.FC = () => {
         okText={t('database.addModalOk')}
         cancelText={t('common.cancel')}
       >
-        <Form form={form} layout="vertical" style={{ marginTop: 12 }}>
+        <Form form={form} layout="vertical">
           <Form.Item name="name" label={t('servers.colName')} rules={[{ required: true, message: t('servers.validationNameRequired') }]}>
             <Input placeholder={t('servers.fieldNamePlaceholder')} />
           </Form.Item>

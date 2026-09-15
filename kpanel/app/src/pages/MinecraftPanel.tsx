@@ -2387,7 +2387,7 @@ const MinecraftPanel: React.FC = () => {
           width={500}
           bodyStyle={{ overflow: 'visible' }}
         >
-          <Form layout="vertical" style={{ marginTop: 12 }}>
+          <Form layout="vertical">
             <Form.Item label="Chọn Vật phẩm">
               <Select
                 showSearch

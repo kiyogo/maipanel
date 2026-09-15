@@ -785,7 +785,7 @@ const Files: React.FC = () => {
           <Select
             size="small"
             value={batchAction || undefined}
-            onChange={setBatchAction}
+            onChange={(val) => setBatchAction(val || '')}
             style={{ width: 140 }}
             placeholder={t('files.batchPlaceholder')}
             options={[
@@ -800,7 +800,7 @@ const Files: React.FC = () => {
       </div>
 
       <Modal title={t('files.modalNewTitle')} open={open} onOk={handleUpload} onCancel={() => setOpen(false)} okText={t('files.new')} cancelText={t('common.cancel')}>
-        <Form form={form} layout="vertical" style={{ marginTop: 12 }} initialValues={{ type: 'file' }}>
+        <Form form={form} layout="vertical" initialValues={{ type: 'file' }}>
           <Form.Item name="type" label={t('files.modalNewType')} rules={[{ required: true }]}>
             <Select options={[{ label: t('files.modalNewTypeFile'), value: 'file' }, { label: t('files.modalNewTypeDir'), value: 'dir' }]} />
           </Form.Item>
@@ -811,7 +811,7 @@ const Files: React.FC = () => {
       </Modal>
 
       <Modal title={t('files.modalRenameTitle')} open={renameOpen} onOk={handleRename} onCancel={() => setRenameOpen(false)} okText={t('common.save')} cancelText={t('common.cancel')}>
-        <Form form={renameForm} layout="vertical" style={{ marginTop: 12 }}>
+        <Form form={renameForm} layout="vertical">
           <Form.Item name="newName" label={t('files.modalRenameNewName')} rules={[{ required: true, message: t('files.validationNewNameRequired') }]}>
             <Input placeholder={t('files.modalRenamePlaceholder')} />
           </Form.Item>
@@ -819,7 +819,7 @@ const Files: React.FC = () => {
       </Modal>
 
       <Modal title={t('files.modalPermTitle')} open={permOpen} onOk={handlePermission} onCancel={() => setPermOpen(false)} okText={t('common.save')} cancelText={t('common.cancel')}>
-        <Form form={permForm} layout="vertical" style={{ marginTop: 12 }}>
+        <Form form={permForm} layout="vertical">
           <Form.Item name="permission" label={`${t('files.columnPermission')} (ex: 755, 644)`}><Input placeholder="755" /></Form.Item>
           <Form.Item name="owner" label={t('common.owner')}><Input placeholder="www-data" /></Form.Item>
           <Form.Item name="group" label={t('common.group')}><Input placeholder="www-data" /></Form.Item>

@@ -28,10 +28,10 @@ services:
     volumes:
       - redis_data:/data
 
-  # ===== Backend (NestJS) =====
+  # ===== Backend (Rust + Axum + Tokio + SQLx) =====
   backend:
     build:
-      context: ./api
+      context: ./backend
       dockerfile: Dockerfile
     container_name: kpanel_backend
     restart: unless-stopped
@@ -41,6 +41,7 @@ services:
       redis:
         condition: service_started
     environment:
+      DATABASE_URL: postgres://kpanel:kpanel123@postgres:5432/kpanel
       DB_HOST:     postgres
       DB_PORT:     5432
       DB_USERNAME: kpanel
@@ -49,6 +50,7 @@ services:
       JWT_SECRET:  kpanel-super-secret-jwt-key-2026
       JWT_EXPIRES_IN: 7d
       PORT:        3001
+      RUST_LOG:    kpanel_backend=info,tower_http=info
     ports:
       - "3001:3001"
 
