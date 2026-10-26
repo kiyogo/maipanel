@@ -42,7 +42,7 @@ README mô tả hành vi đang có trong source. Các tài liệu ý tưởng/k�
 Yêu cầu dùng chung: Node.js **22.13+ thuộc nhánh 22.x**, hoặc **24.11+**, cùng npm. Mỗi thư mục `web`, `kpanel/api`, `kpanel/app`, `minepanel/api`, `minepanel/app` có `package.json` và lockfile riêng; không chạy `npm install` ở gốc repo.
 
 ```sh
-git clone https://github.com/ngdaison/maipanel.git
+git clone https://github.com/kiyogo/maipanel.git
 cd maipanel
 ```
 
