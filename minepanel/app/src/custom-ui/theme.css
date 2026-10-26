@@ -583,7 +583,7 @@ textarea.ant-input {
 }
 
 .ant-select-dropdown {
-  position: absolute;
+  position: fixed;
   left: -1px;
   width: calc(100% + 2px);
   padding: 0 !important;
@@ -591,8 +591,9 @@ textarea.ant-input {
   border: 1px solid var(--antd-border);
   border-radius: var(--antd-radius-base);
   box-shadow: var(--antd-shadow-dropdown);
-  z-index: 1070 !important;
+  z-index: 100050 !important;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 /* Ẩn hoàn toàn thanh cuộn (scrollbar) ở tất cả các menu thả để không bị lỗi giao diện */
@@ -612,8 +613,8 @@ textarea.ant-input {
 .ant-select-dropdown-small .ant-select-item {
   padding: 0 8px !important;
   font-size: 12px !important;
-  height: 26px !important;
-  line-height: 26px !important;
+  height: 24px !important;
+  line-height: 24px !important;
 }
 
 .ant-select-dropdown .ant-select-item {
@@ -630,12 +631,15 @@ textarea.ant-input {
   border-bottom-right-radius: calc(var(--antd-radius-base) - 1px) !important;
 }
 
+.ant-select-dropdown .ant-select-item:first-child:last-child {
+  border-radius: calc(var(--antd-radius-base) - 1px) !important;
+}
 
 /* ==========================================
    CompactSelect — simple dropdown for small menus
    ========================================== */
 .compact-select-dropdown {
-  position: absolute;
+  position: fixed;
   left: 0;
   min-width: 100%;
   width: max-content;
@@ -644,8 +648,9 @@ textarea.ant-input {
   border: 1px solid var(--antd-border);
   border-radius: var(--antd-radius-base);
   box-shadow: var(--antd-shadow-dropdown);
-  z-index: 1050;
+  z-index: 100050 !important;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .compact-select-item {
@@ -1440,22 +1445,33 @@ textarea.ant-input {
 @keyframes kSelectEnter {
   from {
     opacity: 0;
-    transform: scale(0.2);
+    transform: translateY(-4px) scaleY(0.96);
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+@keyframes kSelectEnterUp {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scaleY(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
   }
 }
 
 @keyframes kSelectExit {
   from {
     opacity: 1;
-    transform: scale(1);
+    transform: translateY(0) scaleY(1);
   }
   to {
     opacity: 0;
-    transform: scale(0.2);
+    transform: translateY(-4px) scaleY(0.96);
   }
 }
 
@@ -1530,11 +1546,18 @@ textarea.ant-input {
 
 .k-select-enter {
   animation: kSelectEnter 0.16s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  transform-origin: top center;
   will-change: transform, opacity;
 }
 
+.ant-select-dropdown-placement-topLeft.k-select-enter {
+  animation: kSelectEnterUp 0.16s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  transform-origin: bottom center;
+}
+
 .k-select-exit {
-  animation: kSelectExit 0.15s cubic-bezier(0.7, 0, 0.84, 0) forwards !important;
+  animation: kSelectExit 0.12s cubic-bezier(0.7, 0, 0.84, 0) forwards !important;
+  pointer-events: none !important;
   will-change: transform, opacity;
 }
 

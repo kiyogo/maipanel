@@ -1,9 +1,9 @@
 -- Seed initial admin users (password: admin123)
--- bcrypt hash for 'admin123': $2b$10$hKzK2y9E8wY01V3v8C7jAeO3Oq0J6k7q5C8d2V4b6N9m0L3k5J8p.
+-- bcrypt hash for 'admin123': $2b$10$SyVYo851N6lG1oqIUjw7RereyXbNz7U6AY9QZ3EMCuy7LEGkmjx6.
 INSERT INTO users (email, name, password, role, is_active)
 VALUES 
-    ('admin@kpanel.com', 'Administrator', '$2b$10$G0N47j5W0cI23EomxZq88OTyqJgQv8y6O9eG6B7F9t4hK1l3N5p6y', 'Administrator', TRUE),
-    ('admin@kiyovn.com', 'Administrator', '$2b$10$G0N47j5W0cI23EomxZq88OTyqJgQv8y6O9eG6B7F9t4hK1l3N5p6y', 'Administrator', TRUE)
+    ('admin@kpanel.com', 'Administrator', '$2b$10$SyVYo851N6lG1oqIUjw7RereyXbNz7U6AY9QZ3EMCuy7LEGkmjx6.', 'Administrator', TRUE),
+    ('admin@kiyovn.com', 'Administrator', '$2b$10$SyVYo851N6lG1oqIUjw7RereyXbNz7U6AY9QZ3EMCuy7LEGkmjx6.', 'Administrator', TRUE)
 ON CONFLICT (email) DO NOTHING;
 
 -- Seed simulated servers

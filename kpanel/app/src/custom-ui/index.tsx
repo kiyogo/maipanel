@@ -1396,82 +1396,121 @@ export const Select: React.FC<SelectProps> = ({
   }, [value]);
 
   const resolvedValue = value !== undefined ? value : internalVal;
+
   const [open, setOpen] = useState(false);
-  const [dropdownPosition, setDropdownPosition] = useState<{ rectTop: number; viewportHeight: number } | null>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+    isFlipped: boolean;
+  } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, []);
-
-  // Snapshot value when open changes so position never shifts when user selects another option
-  const openValueRef = useRef<any>(resolvedValue);
-
-  // Measure trigger element bounding rect when open changes
-  useEffect(() => {
-    if (open && containerRef.current) {
-      openValueRef.current = resolvedValue;
-      const rect = containerRef.current.getBoundingClientRect();
-      setDropdownPosition({
-        rectTop: rect.top,
-        viewportHeight: window.innerHeight,
-      });
-    }
-  }, [open]);
-
+  const ITEM_HEIGHT = size === 'small' ? 26 : size === 'large' ? 36 : 32;
+  const triggerHeight = size === 'small' ? 24 : size === 'large' ? 40 : 32;
   const isMultiple = mode === 'multiple' || mode === 'tags';
   const hasValue = resolvedValue !== undefined && resolvedValue !== null && resolvedValue !== '';
   const values = isMultiple
     ? (Array.isArray(resolvedValue) ? resolvedValue : (hasValue ? [resolvedValue] : []))
     : (hasValue ? [resolvedValue] : []);
 
-  const ITEM_HEIGHT = size === 'small' ? 24 : 32;
-  const triggerHeight = size === 'small' ? 24 : size === 'large' ? 40 : 32;
-  const dropdownHeight = options.length * ITEM_HEIGHT;
+  const updatePosition = useCallback(() => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return;
 
-  // Viewport and Navbar height calculations
-  const rectTop = dropdownPosition ? dropdownPosition.rectTop : 0;
-  const viewportHeight = dropdownPosition ? dropdownPosition.viewportHeight : window.innerHeight;
-  const navbarHeight = 56;
-  const safeTop = navbarHeight + 20;
-  const safeBottom = viewportHeight - 20;
-  const maxVisibleHeight = Math.max(100, safeBottom - safeTop);
-  const visibleHeight = Math.min(dropdownHeight + 2, maxVisibleHeight);
+    const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth;
+    const margin = 8;
+    const estimatedHeight = Math.min(options.length * ITEM_HEIGHT + 8, 260);
 
-  // Use openValueRef.current for positioning so clicking an option does not jump/shift dropdown position
-  const positionValue = open ? openValueRef.current : (openValueRef.current !== undefined ? openValueRef.current : resolvedValue);
-  const selIdx = !isMultiple ? options.findIndex(o => String(o.value) === String(positionValue)) : -1;
-  const activeIndex = selIdx >= 0 ? selIdx : 0;
+    const spaceBelow = viewportHeight - rect.bottom - margin;
+    const spaceAbove = rect.top - margin;
 
-  const idealScrollTop = activeIndex * ITEM_HEIGHT - (visibleHeight / 2 - ITEM_HEIGHT / 2);
-  const boundedScrollTop = Math.max(0, Math.min(dropdownHeight - visibleHeight, idealScrollTop));
+    // Chuẩn web: mặc định rơi xuống dưới trigger, chỉ flip lên khi bên dưới không đủ chỗ
+    const shouldFlip = spaceBelow < Math.min(estimatedHeight, 140) && spaceAbove > spaceBelow;
 
-  const idealTop = (triggerHeight / 2) - (activeIndex * ITEM_HEIGHT + ITEM_HEIGHT / 2 - boundedScrollTop);
+    const maxHeight = shouldFlip
+      ? Math.min(260, Math.max(100, spaceAbove))
+      : Math.min(260, Math.max(100, spaceBelow));
 
-  const minTop = safeTop - rectTop;
-  const maxTop = safeBottom - rectTop - visibleHeight;
-  const boundedTop = Math.max(minTop, Math.min(maxTop, idealTop));
+    const finalHeight = Math.min(estimatedHeight, maxHeight);
 
-  const initialScrollTop = Math.max(0, Math.min(dropdownHeight - visibleHeight, boundedScrollTop - (idealTop - boundedTop)));
-  const isScrollable = dropdownHeight > maxVisibleHeight;
+    const top = shouldFlip
+      ? Math.round(rect.top - finalHeight - 4)
+      : Math.round(rect.bottom + 4);
 
-  // Scroll active item into view synchronously before paint to prevent jump/stutter
+    let left = Math.round(rect.left);
+    const width = Math.round(rect.width);
+    if (left + width > viewportWidth - margin) {
+      left = Math.max(margin, viewportWidth - width - margin);
+    }
+
+    setDropdownPosition({
+      top,
+      left,
+      width,
+      maxHeight,
+      isFlipped: shouldFlip,
+    });
+  }, [ITEM_HEIGHT, options.length]);
+
+  useEffect(() => {
+    if (open) {
+      updatePosition();
+    }
+  }, [open, updatePosition]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleScrollOrResize = (e: Event) => {
+      if (dropdownRef.current && (e.target === dropdownRef.current || dropdownRef.current.contains(e.target as Node))) {
+        return;
+      }
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        if (rect.bottom < 0 || rect.top > window.innerHeight) {
+          setOpen(false);
+          return;
+        }
+      }
+      updatePosition();
+    };
+
+    window.addEventListener('resize', handleScrollOrResize);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    return () => {
+      window.removeEventListener('resize', handleScrollOrResize);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+    };
+  }, [open, updatePosition]);
+
+  // Tự động cuộn đến item đã chọn khi dropdown mở
   React.useLayoutEffect(() => {
     if (open && dropdownPosition && dropdownRef.current) {
-      if (isScrollable) {
-        dropdownRef.current.scrollTop = initialScrollTop;
-      } else {
-        dropdownRef.current.scrollTop = 0;
+      const selectedElem = dropdownRef.current.querySelector('.ant-select-item-selected') as HTMLElement;
+      if (selectedElem) {
+        selectedElem.scrollIntoView({ block: 'nearest' });
       }
     }
-  }, [open, dropdownPosition, initialScrollTop, isScrollable]);
+  }, [open, dropdownPosition]);
 
   const { shouldRender: shouldRenderSelect, animClass: selectAnimClass, overlayRef: selectOverlayRef, closeImmediately: closeSelectImmediately } = useOverlayAnimation(open, 130);
 
@@ -1553,29 +1592,30 @@ export const Select: React.FC<SelectProps> = ({
           <DownOutlined />
         </span>
       </div>
-      {shouldRenderSelect && dropdownPosition && !disabled && (
+      {shouldRenderSelect && dropdownPosition && !disabled && typeof document !== 'undefined' && createPortal(
         <div
           ref={(node) => {
             dropdownRef.current = node;
             selectOverlayRef.current = node;
           }}
-          className={`ant-select-dropdown ${size === 'small' ? 'ant-select-dropdown-small' : ''} ${selectAnimClass === 'enter' ? 'k-select-enter' : 'k-select-exit'}`}
+          className={`ant-select-dropdown ${size === 'small' ? 'ant-select-dropdown-small' : ''} ${selectAnimClass === 'enter' ? 'k-select-enter' : 'k-select-exit'} ${dropdownPosition.isFlipped ? 'ant-select-dropdown-placement-topLeft' : 'ant-select-dropdown-placement-bottomLeft'}`}
           style={{
-            position: 'absolute',
-            top: `${boundedTop}px`,
-            left: -1,
-            width: 'calc(100% + 2px)',
-            height: isScrollable ? `${visibleHeight}px` : 'auto',
-            maxHeight: `${maxVisibleHeight}px`,
-            overflowY: isScrollable ? 'auto' : 'hidden',
+            position: 'fixed',
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`,
+            width: `${dropdownPosition.width}px`,
+            maxHeight: `${dropdownPosition.maxHeight}px`,
+            overflowY: 'auto',
             overflowX: 'hidden',
-            zIndex: 1070,
+            zIndex: 100050,
             background: '#fff',
-            border: '1px solid var(--antd-border)',
-            borderRadius: 'var(--antd-radius-base)',
-            boxShadow: 'var(--antd-shadow-dropdown)',
+            border: '1px solid var(--antd-border, #d9d9d9)',
+            borderRadius: 'var(--antd-radius-base, 6px)',
+            boxShadow: '0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 9px 28px 8px rgba(0, 0, 0, 0.05)',
             boxSizing: 'border-box',
+            padding: '4px 0',
           }}
+          onClick={(e) => e.stopPropagation()}
         >
           {options.map((opt) => {
             const isSelected = values.some(v => String(v) === String(opt.value));
@@ -1612,7 +1652,8 @@ export const Select: React.FC<SelectProps> = ({
               </div>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -1634,29 +1675,68 @@ export const CompactSelect: React.FC<Omit<SelectProps, 'mode' | 'showSearch' | '
   size = 'small',
 }) => {
   const [open, setOpen] = useState(false);
-  const [flipUp, setFlipUp] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number; width: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const { shouldRender: shouldRenderCompact, animClass: compactAnimClass, overlayRef: compactOverlayRef, closeImmediately: closeCompactImmediately } = useOverlayAnimation(open, 130);
 
-  // Close on outside click
+  const updateCompactPosition = useCallback(() => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return;
+    const estimatedDropdownHeight = Math.min(options.length * (size === 'small' ? 24 : 30) + 8, 250);
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const shouldFlip = spaceBelow < estimatedDropdownHeight && rect.top > estimatedDropdownHeight;
+    setCoords({
+      top: shouldFlip ? Math.round(rect.top - estimatedDropdownHeight - 2) : Math.round(rect.bottom + 2),
+      left: Math.round(rect.left),
+      width: Math.round(rect.width),
+    });
+  }, [options.length, size]);
+
   useEffect(() => {
+    if (open) {
+      updateCompactPosition();
+    }
+  }, [open, updateCompactPosition]);
+
+  useEffect(() => {
+    if (!open) return;
     const handleOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
         setOpen(false);
       }
     };
     document.addEventListener('mousedown', handleOutside);
     return () => document.removeEventListener('mousedown', handleOutside);
-  }, []);
+  }, [open]);
 
-  // Flip direction using useLayoutEffect — runs before browser paint, no jump
-  React.useLayoutEffect(() => {
-    if (!open || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const estimatedDropdownHeight = options.length * 30 + 8;
-    setFlipUp(spaceBelow < estimatedDropdownHeight);
-  }, [open, options.length]);
+  useEffect(() => {
+    if (!open) return;
+    const handleScrollOrResize = (e: Event) => {
+      if (dropdownRef.current && (e.target === dropdownRef.current || dropdownRef.current.contains(e.target as Node))) {
+        return;
+      }
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        if (rect.bottom < 0 || rect.top > window.innerHeight) {
+          setOpen(false);
+          return;
+        }
+      }
+      updateCompactPosition();
+    };
+    window.addEventListener('resize', handleScrollOrResize);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    return () => {
+      window.removeEventListener('resize', handleScrollOrResize);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+    };
+  }, [open, updateCompactPosition]);
 
   const triggerHeight = size === 'small' ? 24 : size === 'large' ? 40 : 32;
   const selectedOption = options.find(o => String(o.value) === String(value));
@@ -1699,12 +1779,19 @@ export const CompactSelect: React.FC<Omit<SelectProps, 'mode' | 'showSearch' | '
         <DownOutlined />
       </div>
 
-      {shouldRenderCompact && !disabled && (
+      {shouldRenderCompact && coords && !disabled && typeof document !== 'undefined' && createPortal(
         <div
-          ref={compactOverlayRef}
+          ref={(node) => {
+            dropdownRef.current = node;
+            compactOverlayRef.current = node;
+          }}
           className={`compact-select-dropdown ${compactAnimClass === 'enter' ? 'k-select-enter' : 'k-select-exit'}`}
           style={{
-            ...(flipUp ? { bottom: triggerHeight - 1 } : { top: triggerHeight - 1 }),
+            position: 'fixed',
+            top: `${coords.top}px`,
+            left: `${coords.left}px`,
+            minWidth: `${coords.width}px`,
+            zIndex: 100050,
           }}
           onClick={e => e.stopPropagation()}
         >
@@ -1738,7 +1825,8 @@ export const CompactSelect: React.FC<Omit<SelectProps, 'mode' | 'showSearch' | '
               </div>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -98,7 +98,9 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
             {this.state.error?.toString()}
           </pre>
           <button
-            onClick={() => window.location.reload()}
+            onClick={() => {
+              window.location.href = window.location.pathname + '?_t=' + Date.now();
+            }}
             style={{ marginTop: 12, padding: '8px 16px', background: '#009688', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}
           >
             Tải lại trang

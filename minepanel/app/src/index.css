@@ -822,6 +822,7 @@ td.ant-table-column-sort {
 .transparent-table-card .ant-table-wrapper .ant-pagination-container .ant-select-dropdown,
 .ant-pagination-container .ant-select-dropdown {
   padding: 0 !important;
+  overflow: hidden !important;
 }
 
 .transparent-table-card .ant-table-wrapper .ant-pagination-container .ant-select-item,
@@ -852,6 +853,7 @@ td.ant-table-column-sort {
 }
 .ant-tabs-ink-bar {
   background: #1677ff !important;
+  transition: all 0.3s cubic-bezier(0.645, 0.045, 0.355, 1);
 }
 
 /* Decrease the gap between pagination item buttons to place them closer together */

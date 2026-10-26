@@ -1,5 +1,5 @@
 # ===== Build Stage =====
-FROM rust:1.80-alpine AS builder
+FROM rust:alpine AS builder
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ COPY src ./src
 RUN cargo build --release
 
 # ===== Runtime Stage =====
-FROM alpine:3.20
+FROM alpine:latest
 
 WORKDIR /app
 
